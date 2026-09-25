@@ -1,7 +1,7 @@
 {
   "source": {
     "title": "Segmentaciones Excambiare",
-    "url": "https://docs.google.com/document/d/1eG1GhAt6ZmV3aeivNZ9MONpGQI8rKMAH48Vtjw4iimk/edit",
+    "url": "https://docs.google.com/document/d/1NZTJ-ElsQ1jXylnSvTBuLQQEtu-cpEmYnyt-iy_S8K8/edit",
     "syncedAt": "2026-09-25"
   },
   "platform": "Meta Ads",
@@ -29,7 +29,7 @@
         { "group": "Vida nocturna", "items": ["Fiestas", "Bares", "Clubes", "Vida nocturna", "Discotecas", "Entretenimiento"] },
         { "group": "Música", "items": ["DJ", "Reggaetón", "Música electrónica", "Conciertos", "Festivales de música", "Música en vivo"] }
       ],
-      "behaviors": ["Compradores que interactúan (Engaged Shoppers)"],
+      "behaviors": ["Compradores que interactúan"],
       "audience": "Advantage+"
     },
     {

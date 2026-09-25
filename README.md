@@ -52,7 +52,7 @@ La vista previa usa el visor de Drive (`/preview`), por lo que el usuario debe t
 ## Segmentacion
 
 El modulo lee `data/excambiare-segmentation.json`, transcrito del documento
-"Segmentaciones Excambiare" (https://docs.google.com/document/d/1eG1GhAt6ZmV3aeivNZ9MONpGQI8rKMAH48Vtjw4iimk/edit).
+"Segmentaciones Excambiare" (https://docs.google.com/document/d/1NZTJ-ElsQ1jXylnSvTBuLQQEtu-cpEmYnyt-iy_S8K8/edit).
 Cada marca guarda ubicaciones, exclusiones (distritos y regiones), rango de edad, tipo de segmentacion,
 intereses agrupados por tema, comportamientos y tipo de publico. Si el documento cambia, se actualiza el JSON
 y `source.syncedAt`. El boton "Copiar segmentacion" genera el texto listo para pegar.
