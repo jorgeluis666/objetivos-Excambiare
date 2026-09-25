@@ -1,0 +1,94 @@
+{
+  "source": {
+    "title": "Segmentaciones Excambiare",
+    "url": "https://docs.google.com/document/d/1eG1GhAt6ZmV3aeivNZ9MONpGQI8rKMAH48Vtjw4iimk/edit",
+    "syncedAt": "2026-09-25"
+  },
+  "platform": "Meta Ads",
+  "brands": [
+    {
+      "id": "mex",
+      "name": "MEX",
+      "tone": "green",
+      "ageMin": 18,
+      "ageMax": 25,
+      "segmentationType": ["Intereses", "Comportamientos", "Público Advantage+"],
+      "locations": [
+        "Cercado de Lima", "Miraflores", "Barranco", "San Isidro", "San Borja", "Santiago de Surco",
+        "Surquillo", "Lince", "Jesús María", "Magdalena del Mar", "Pueblo Libre", "San Miguel", "Breña",
+        "La Victoria", "San Luis", "Rímac", "El Agustino", "Independencia", "San Martín de Porres",
+        "Los Olivos", "Chorrillos", "Ate", "Callao", "Bellavista", "La Perla", "Carmen de la Legua-Reynoso"
+      ],
+      "exclusions": {
+        "districts": ["San Juan de Miraflores", "San Juan de Lurigancho"],
+        "regions": []
+      },
+      "interests": [
+        { "group": "Bebidas", "items": ["Tequila", "Cócteles", "Cerveza", "Bebidas alcohólicas", "Licores", "Bebidas espirituosas", "Mixología", "Coctelería", "Crema de licor", "Bebidas saborizadas"] },
+        { "group": "Marcas de referencia", "items": ["Baileys", "Jägermeister"] },
+        { "group": "Vida nocturna", "items": ["Fiestas", "Bares", "Clubes", "Vida nocturna", "Discotecas", "Entretenimiento"] },
+        { "group": "Música", "items": ["DJ", "Reggaetón", "Música electrónica", "Conciertos", "Festivales de música", "Música en vivo"] }
+      ],
+      "behaviors": ["Compradores que interactúan (Engaged Shoppers)"],
+      "audience": "Advantage+"
+    },
+    {
+      "id": "gold-fusion",
+      "name": "Gold Fusion",
+      "tone": "amber",
+      "ageMin": 20,
+      "ageMax": 45,
+      "segmentationType": ["Intereses", "Comportamientos", "Público Advantage+"],
+      "locations": [
+        "Cercado de Lima", "Miraflores", "San Isidro", "Barranco", "Santiago de Surco", "San Borja", "La Molina",
+        "Surquillo", "Lince", "Jesús María", "Magdalena del Mar", "Pueblo Libre", "San Miguel", "Breña",
+        "La Victoria", "San Luis", "Chorrillos", "Rímac", "El Agustino", "San Martín de Porres", "Independencia",
+        "Los Olivos", "Ate", "Callao", "Bellavista", "La Perla", "Carmen de la Legua-Reynoso"
+      ],
+      "exclusions": {
+        "districts": ["San Juan de Miraflores", "San Juan de Lurigancho"],
+        "regions": [
+          "Amazonas", "Áncash / Huaraz", "Apurímac / Abancay", "Cajamarca", "Cusco", "Ica", "Junín",
+          "La Libertad / Trujillo", "Lambayeque / Chiclayo", "Loreto / Iquitos", "Madre de Dios",
+          "Pasco / Cerro de Pasco", "Puno / Juliaca", "Tumbes", "Ucayali", "San Martín"
+        ]
+      },
+      "interests": [
+        { "group": "Bebidas", "items": ["Vino espumoso", "Espumantes", "Champagne", "Prosecco", "Vino", "Cócteles", "Bebidas alcohólicas", "Bebidas premium"] },
+        { "group": "Marcas de referencia", "items": ["Riccadonna", "Chandon", "Moët & Chandon", "Freixenet", "Martini"] },
+        { "group": "Lujo y estilo de vida", "items": ["Productos de lujo", "Marcas de lujo", "Estilo de vida de lujo", "Viajes de lujo", "Viajes en primera clase", "Hoteles de lujo", "Moda", "Experiencias premium"] },
+        { "group": "Gastronomía", "items": ["Restaurantes de alta gama", "Gastronomía", "Fine dining"] },
+        { "group": "Celebraciones y vida nocturna", "items": ["Fiestas", "Celebraciones", "Eventos sociales", "Eventos nocturnos", "Bares", "Clubes", "Vida nocturna", "Discotecas"] },
+        { "group": "Música", "items": ["Música en vivo", "DJ"] }
+      ],
+      "behaviors": ["Compradores que interactúan", "Viajeros frecuentes", "Viajeros internacionales frecuentes"],
+      "audience": "Advantage+"
+    },
+    {
+      "id": "sol-y-tierra",
+      "name": "Sol y Tierra",
+      "tone": "wine",
+      "ageMin": 25,
+      "ageMax": 55,
+      "segmentationType": ["Intereses", "Comportamientos", "Público Advantage+"],
+      "locations": [
+        "Cercado de Lima", "Miraflores", "San Isidro", "Barranco", "Santiago de Surco", "San Borja", "La Molina",
+        "Surquillo", "Lince", "Jesús María", "Magdalena del Mar", "Pueblo Libre", "San Miguel", "Breña",
+        "La Victoria", "San Luis", "Chorrillos", "Rímac", "El Agustino", "San Martín de Porres", "Independencia",
+        "Los Olivos", "Ate", "Callao", "Bellavista", "La Perla", "Carmen de la Legua-Reynoso"
+      ],
+      "exclusions": {
+        "districts": ["San Juan de Miraflores", "San Juan de Lurigancho"],
+        "regions": []
+      },
+      "interests": [
+        { "group": "Bebidas", "items": ["Pisco", "Vino", "Vino tinto", "Vino rosado", "Vino semiseco", "Vino Borgoña", "Bebidas alcohólicas", "Licores", "Cócteles", "Coctelería"] },
+        { "group": "Marcas de referencia", "items": ["Santiago Queirolo", "Tabernero", "Tacama", "Ocucaje", "Portón"] },
+        { "group": "Gastronomía", "items": ["Gastronomía peruana", "Comida peruana", "Parrillas", "Restaurantes", "Maridaje", "Cocina"] },
+        { "group": "Celebraciones", "items": ["Reuniones sociales", "Celebraciones", "Fiestas", "Eventos", "Cumpleaños", "Aniversarios", "Matrimonios", "Reuniones familiares"] }
+      ],
+      "behaviors": ["Compradores que interactúan", "Cumpleaños próximos", "Aniversarios próximos", "Otras señales de eventos o celebraciones próximas disponibles en Meta Ads"],
+      "audience": "Advantage+"
+    }
+  ]
+}

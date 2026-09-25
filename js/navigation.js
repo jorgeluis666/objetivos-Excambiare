@@ -29,6 +29,13 @@
       source: 'Fuente: Carpeta compartida Reportes Amador / Google Drive',
       footer: 'Vista previa y descarga directa desde Drive',
     },
+    'view-segments': {
+      title: 'Segmentación',
+      caption: 'Públicos de Meta Ads por marca',
+      status: 'Segmentación al 25 de septiembre',
+      source: 'Fuente: Segmentaciones Excambiare / Google Docs',
+      footer: 'MEX · Gold Fusion · Sol y Tierra',
+    },
   };
 
   function storedView() {
@@ -74,6 +81,7 @@
     if (viewId === 'view-obj') window.setTimeout(() => window.dispatchEvent(new Event('resize')), 0);
     if (viewId === 'view-history') window.AmadorObjectives?.renderHistory?.();
     if (viewId === 'view-reports') window.ReportsArchive?.init();
+    if (viewId === 'view-segments') window.SegmentationModule?.init();
   }
 
   function initNavigation() {

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="css/dashboard.css?v=1.9.2">
+<link rel="stylesheet" href="css/dashboard.css?v=1.10.0">
 <style>
   .reservations-total-row td { height: auto !important; padding: 10px 12px !important; border-top: 2px solid #cbd5e1 !important; color: #0f172a !important; background: #f8fafc; font-size: 13px; font-weight: 800; vertical-align: middle; }
   .reservations-total-row .total-label { text-align: right; }
@@ -40,7 +40,7 @@
 <body>
 <div class="shell">
   <aside class="sidebar" id="amador-sidebar">
-    <div class="s-brand"><div class="s-title">Amador</div><div class="s-sub">BI Agencia Lima Retail <span class="app-version">v1.9.2</span></div></div>
+    <div class="s-brand"><div class="s-title">Amador</div><div class="s-sub">BI Agencia Lima Retail <span class="app-version">v1.10.0</span></div></div>
     <div class="s-group-lbl">Modulos activos</div>
     <button class="s-item active" type="button" data-view-target="view-obj">
       <div class="s-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div>
@@ -57,6 +57,10 @@
     <button class="s-item" type="button" data-view-target="view-reports">
       <div class="s-icon"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="16" x2="13" y2="16"/></svg></div>
       <div class="s-text"><div class="s-title-nav">Archivo de Reportes</div><div class="s-desc-nav">Documentos en Drive</div></div>
+    </button>
+    <button class="s-item" type="button" data-view-target="view-segments">
+      <div class="s-icon"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18.5 14.5A6.5 6.5 0 0 1 21.5 20"/></svg></div>
+      <div class="s-text"><div class="s-title-nav">Segmentación</div><div class="s-desc-nav">Públicos por marca</div></div>
     </button>
     <div class="s-group-lbl paused-label">Modulos pausados</div>
     <button class="s-item disabled" type="button" disabled aria-disabled="true"><div class="s-icon"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div><div class="s-text"><div class="s-title-nav">Comparativo YoY</div><div class="s-desc-nav">Evolucion interanual</div></div><span class="module-status">Proximamente</span></button>
@@ -275,6 +279,19 @@
         </div>
       </section>
 
+      <section class="view" id="view-segments">
+        <div class="sec-lbl">05 - Segmentación</div>
+        <h1 class="section-title">Segmentación de públicos</h1>
+        <p class="section-desc">Configuración de públicos en Meta Ads para cada marca: ubicaciones, exclusiones, edad, intereses, comportamientos y tipo de público. Usa la pestaña Comparar marcas para ver las diferencias entre segmentaciones.</p>
+        <div class="kpi-strip segmentation-kpis" id="segmentation-kpis" aria-label="KPIs de segmentacion"></div>
+        <div class="panel-head seg-toolbar">
+          <div class="seg-tabs" id="segmentation-tabs" role="tablist" aria-label="Marcas"></div>
+          <a class="refresh-sheet-btn seg-source-link" id="segmentation-source-link" href="https://docs.google.com/document/d/1eG1GhAt6ZmV3aeivNZ9MONpGQI8rKMAH48Vtjw4iimk/edit" target="_blank" rel="noopener">Abrir documento fuente</a>
+        </div>
+        <div class="panel-sub seg-source-sub" id="segmentation-sub"></div>
+        <div id="segmentation-body"><div class="empty-state">Cargando segmentación...</div></div>
+      </section>
+
       <div class="site-footer"><span id="footer-source">Fuente: Distribucion-amador + Registro de reservas x DM</span><span id="footer-status">Sincronizado por Agencia Lima Retail</span></div>
     </div>
   </main>
@@ -296,12 +313,13 @@
     <div class="reports-modal-foot">La vista previa usa el visor de Google Drive: necesitas iniciar sesion con una cuenta que tenga acceso a la carpeta compartida.</div>
   </div>
 </div>
-<script src="js/objectives.js?v=1.9.2"></script>
-<script src="js/messages-calculator.js?v=1.9.2"></script>
-<script src="js/reports-archive.js?v=1.9.2"></script>
-<script src="js/projections.js?v=1.9.2"></script>
-<script src="js/navigation.js?v=1.9.2"></script>
-<script src="js/sidebar.js?v=1.9.2"></script>
+<script src="js/objectives.js?v=1.10.0"></script>
+<script src="js/messages-calculator.js?v=1.10.0"></script>
+<script src="js/reports-archive.js?v=1.10.0"></script>
+<script src="js/projections.js?v=1.10.0"></script>
+<script src="js/segmentation.js?v=1.10.0"></script>
+<script src="js/navigation.js?v=1.10.0"></script>
+<script src="js/sidebar.js?v=1.10.0"></script>
 <script src="auth-login.js?v=1.9.3"></script>
 <script>
   AuthLogin.init({ password: 'Amador2026' });

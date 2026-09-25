@@ -2,7 +2,7 @@
 
 Dashboard de Agencia Lima Retail para controlar la inversion publicitaria de Amador.
 
-Version actual: `v1.9.2`.
+Version actual: `v1.10.0`.
 
 ## Versionado
 
@@ -21,6 +21,7 @@ El proyecto usa la nomenclatura `vMAJOR.MINOR.PATCH`:
 - Proyecciones: cierre de mes estimado con los datos reales y calculadora de inversion por CPL.
 - Historico de Campanas finalizadas.
 - Archivo de Reportes: catalogo de los documentos guardados en la carpeta de Google Drive.
+- Segmentacion: publicos de Meta Ads por marca (MEX, Gold Fusion, Sol y Tierra) y comparativo entre marcas.
 
 Los modulos Comparativo YoY, Distribucion, Productos Web y Usuarios y Claves se muestran deshabilitados hasta su futura implementacion.
 
@@ -47,6 +48,14 @@ el tipo de documento, el periodo y la version vigente se deducen en el navegador
 
 Para incorporar nuevos documentos basta con agregar su bloque al arreglo `files` y actualizar `syncedAt`.
 La vista previa usa el visor de Drive (`/preview`), por lo que el usuario debe tener acceso a la carpeta.
+
+## Segmentacion
+
+El modulo lee `data/excambiare-segmentation.json`, transcrito del documento
+"Segmentaciones Excambiare" (https://docs.google.com/document/d/1eG1GhAt6ZmV3aeivNZ9MONpGQI8rKMAH48Vtjw4iimk/edit).
+Cada marca guarda ubicaciones, exclusiones (distritos y regiones), rango de edad, tipo de segmentacion,
+intereses agrupados por tema, comportamientos y tipo de publico. Si el documento cambia, se actualiza el JSON
+y `source.syncedAt`. El boton "Copiar segmentacion" genera el texto listo para pegar.
 
 ## Sincronizacion de escritura con Google Sheets
 
