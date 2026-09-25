@@ -1,8 +1,8 @@
 {
-  "name": "objetivos-amador",
+  "name": "objetivos-excambiare",
   "version": "1.10.0",
   "private": true,
-  "description": "Dashboard de objetivos e inversion publicitaria de Amador",
+  "description": "Dashboard de objetivos e inversion publicitaria de Inversiones Excambiare",
   "scripts": {
     "dev": "live-server --port=3000 --open=index.html --no-browser",
     "build": "node scripts/build.js"

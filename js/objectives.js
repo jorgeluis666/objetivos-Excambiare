@@ -1,17 +1,17 @@
 (function () {
-  const DATA_URL = 'data/amador-ads-2026.json';
-  const JUNE_DATA_URL = 'data/amador-june-sheet-2026.json';
-  const JULY_DATA_URL = 'data/amador-july-sheet-2026.json';
-  const AUGUST_DATA_URL = 'data/amador-august-sheet-2026.json';
-  const SEPTEMBER_DATA_URL = 'data/amador-september-sheet-2026.json';
+  const DATA_URL = 'data/excambiare-ads-2026.json';
+  const JUNE_DATA_URL = 'data/excambiare-june-sheet-2026.json';
+  const JULY_DATA_URL = 'data/excambiare-july-sheet-2026.json';
+  const AUGUST_DATA_URL = 'data/excambiare-august-sheet-2026.json';
+  const SEPTEMBER_DATA_URL = 'data/excambiare-september-sheet-2026.json';
   const SHEET_ID = ''; // NEUTRALIZADO: pendiente rehacer sobre la base limpia
   const SHEET_MONTH = 'Septiembre';
   const REFRESH_BUTTON_IDS = ['campaigns-refresh-btn', 'projection-refresh-btn'];
   const LIVE_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_MONTH)}`;
   const SYNC_INTERVAL_MS = 60 * 60 * 1000;
-  const GOALS_KEY = 'amador-reservation-goals-v1';
-  const SHEET_SYNC_ENDPOINT_KEY = 'amador-sheet-sync-endpoint-v1';
-  const CHART_COLLAPSED_KEY = 'amador-chart-collapsed-v1';
+  const GOALS_KEY = 'excambiare-reservation-goals-v1';
+  const SHEET_SYNC_ENDPOINT_KEY = 'excambiare-sheet-sync-endpoint-v1';
+  const CHART_COLLAPSED_KEY = 'excambiare-chart-collapsed-v1';
   const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const SHORT_MONTHS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const REQUIRED_HEADERS = ['Tipo','Campaña','Anuncio','Objetivo','Reservas','Objetivo Reservas','Mensajes','Costo por mensaje','Costo por reserva','Ratio de reservas','Estado','Fecha de inicio','Fecha de fin','Duración (días)','Días restantes','Importe diario','Presupuesto total x campaña','Gasto x Campaña','Saldo por campaña','Proyección real de gasto mesual'];
@@ -24,7 +24,7 @@
     messages: { label: 'Mensajes', unit: 'count', color: '#16a34a', fill: 'rgba(22,163,74,.10)' },
     reservations: { label: 'Reservas', unit: 'count', color: '#ea580c', fill: 'rgba(234,88,12,.10)' },
   };
-  const CHART_SERIES_KEY = 'amador-chart-series-v1';
+  const CHART_SERIES_KEY = 'excambiare-chart-series-v1';
   const state = { data: null, types: readChartSeries(), month: 'Septiembre', chart: null, syncTimer: null, goals: readGoals(), chartCollapsed: readChartCollapsed(), lastSync: null };
 
   const fmtMoney = value => Number.isFinite(Number(value)) ? `S/. ${Number(value).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
@@ -69,11 +69,11 @@
       window.history.replaceState({}, document.title, window.location.pathname);
       return fromUrl.trim();
     }
-    return (window.AMADOR_SHEET_SYNC_ENDPOINT || localStorage.getItem(SHEET_SYNC_ENDPOINT_KEY) || '').trim();
+    return (window.EXCAMBIARE_SHEET_SYNC_ENDPOINT || localStorage.getItem(SHEET_SYNC_ENDPOINT_KEY) || '').trim();
   }
 
   // ── Custom campaigns / ads (stored in localStorage) ──────────────────────
-  const CUSTOM_KEY = 'amador-custom-rows-v1';
+  const CUSTOM_KEY = 'excambiare-custom-rows-v1';
   function readCustom() { try { return JSON.parse(localStorage.getItem(CUSTOM_KEY) || '{}'); } catch { return {}; } }
   function saveCustom(data) { try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(data)); } catch {} }
   function getMonthCustom() { return readCustom()[state.month] || { campaigns: [], extraAds: {} }; }
@@ -254,7 +254,7 @@
       spendBreakdown: { sales: round2(spend - brandingSpend), branding: brandingSpend },
       campaigns,
       headers: headers.map(header => String(header || '').trim()).filter(Boolean),
-      source: `Google Sheets / Distribucion-amador / ${SHEET_MONTH}`
+      source: `Google Sheets / Distribucion-excambiare / ${SHEET_MONTH}`
     };
   }
   function mergeSheetMonth(monthData, source = 'Google Sheets') {
@@ -292,7 +292,7 @@
       updateSyncLabel('Datos sincronizados desde Google Sheets');
       return true;
     } catch (error) {
-      if (!silent) console.warn('[amador] No se pudo sincronizar Google Sheets:', error);
+      if (!silent) console.warn('[excambiare] No se pudo sincronizar Google Sheets:', error);
       updateSyncLabel(manual ? 'No se pudo actualizar desde Google Sheets' : 'Datos locales, esperando sincronizacion');
       return false;
     } finally {
@@ -429,7 +429,7 @@
       updateSyncLabel('Objetivo enviado a Google Sheets');
       setTimeout(() => syncLiveSheet({ silent: true }), 1800);
     } catch (error) {
-      console.warn('[amador] No se pudo enviar el objetivo a Google Sheets:', error);
+      console.warn('[excambiare] No se pudo enviar el objetivo a Google Sheets:', error);
       updateSyncLabel('Cambio local; error al enviar a Google Sheets');
     }
   }
@@ -645,7 +645,7 @@
     if (withTabs) renderTabs();
     renderCampaigns();
     renderHistory();
-    window.dispatchEvent(new CustomEvent('amador:data-updated'));
+    window.dispatchEvent(new CustomEvent('excambiare:data-updated'));
   }
   function wireEvents() {
     document.getElementById('chart-series-toggles').addEventListener('change', event => {
@@ -732,21 +732,21 @@
   }
   async function init() {
     try {
-      if (window.AMADOR_ADS_DATA) state.data = window.AMADOR_ADS_DATA;
+      if (window.EXCAMBIARE_ADS_DATA) state.data = window.EXCAMBIARE_ADS_DATA;
       else { const response = await fetch(DATA_URL, { cache: 'no-store' }); if (!response.ok) throw new Error(`HTTP ${response.status}`); state.data = await response.json(); }
-      const juneData = window.AMADOR_JUNE_DATA || await fetch(JUNE_DATA_URL, { cache: 'no-store' }).then(response => response.json());
+      const juneData = window.EXCAMBIARE_JUNE_DATA || await fetch(JUNE_DATA_URL, { cache: 'no-store' }).then(response => response.json());
       mergeSheetMonth(juneData, state.data.source || 'Datos locales');
-      const julyData = window.AMADOR_JULY_DATA || await fetch(JULY_DATA_URL, { cache: 'no-store' }).then(response => response.json());
+      const julyData = window.EXCAMBIARE_JULY_DATA || await fetch(JULY_DATA_URL, { cache: 'no-store' }).then(response => response.json());
       mergeSheetMonth(julyData, state.data.source || 'Datos locales');
-      const augustData = window.AMADOR_AUGUST_DATA || await fetch(AUGUST_DATA_URL, { cache: 'no-store' }).then(response => response.json());
+      const augustData = window.EXCAMBIARE_AUGUST_DATA || await fetch(AUGUST_DATA_URL, { cache: 'no-store' }).then(response => response.json());
       mergeSheetMonth(augustData, state.data.source || 'Datos locales');
-      const septemberData = window.AMADOR_SEPTEMBER_DATA || await fetch(SEPTEMBER_DATA_URL, { cache: 'no-store' }).then(response => response.json());
+      const septemberData = window.EXCAMBIARE_SEPTEMBER_DATA || await fetch(SEPTEMBER_DATA_URL, { cache: 'no-store' }).then(response => response.json());
       mergeSheetMonth(septemberData, state.data.source || 'Datos locales');
       wireEvents();
       renderAll();
       syncLiveSheet({ silent: true });
       state.syncTimer = setInterval(() => syncLiveSheet({ silent: true }), SYNC_INTERVAL_MS);
-    } catch (error) { document.getElementById('view-obj').innerHTML = '<div class="data-notice error"><strong>No se pudo cargar la informacion de Amador.</strong></div>'; console.error(error); }
+    } catch (error) { document.getElementById('view-obj').innerHTML = '<div class="data-notice error"><strong>No se pudo cargar la informacion de Inversiones Excambiare.</strong></div>'; console.error(error); }
   }
   // Snapshot de solo lectura para los modulos que dependen de estos datos (Proyecciones).
   function snapshot() {
@@ -759,6 +759,6 @@
       months: cloneData(state.data).months,
     };
   }
-  window.AmadorObjectives = { renderHistory, snapshot };
+  window.ExcambiareObjectives = { renderHistory, snapshot };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();

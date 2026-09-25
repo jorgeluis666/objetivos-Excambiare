@@ -1,32 +1,32 @@
 (function () {
-  const VIEW_KEY = 'amador-active-view';
+  const VIEW_KEY = 'excambiare-active-view';
   const VIEW_META = {
     'view-obj': {
       title: 'Gasto publicitario 2026',
       caption: 'Agencia Lima Retail',
       status: 'Datos al 17 de septiembre',
-      source: 'Fuente: Distribucion-amador / Septiembre actualizado',
+      source: 'Fuente: Distribucion-excambiare / Septiembre actualizado',
       footer: 'Sincronizado por Agencia Lima Retail',
     },
     'view-messages': {
       title: 'Proyecciones',
       caption: 'Cierre de mes y planificación por CPL',
       status: 'Proyección sobre datos reales',
-      source: 'Fuente: Gasto publicitario / Distribucion-amador',
+      source: 'Fuente: Gasto publicitario / Distribucion-excambiare',
       footer: 'Proyección lineal según el ritmo del mes',
     },
     'view-history': {
       title: 'Histórico de Campañas',
       caption: 'Campañas finalizadas',
       status: 'Datos al 17 de septiembre',
-      source: 'Fuente: Distribucion-amador / Histórico consolidado',
+      source: 'Fuente: Distribucion-excambiare / Histórico consolidado',
       footer: 'Solo campañas finalizadas',
     },
     'view-reports': {
       title: 'Archivo de Reportes',
       caption: 'Documentos en Google Drive',
       status: 'Catalogo al 17 de septiembre',
-      source: 'Fuente: Carpeta compartida Reportes Amador / Google Drive',
+      source: 'Fuente: Carpeta compartida Reportes Excambiare / Google Drive',
       footer: 'Vista previa y descarga directa desde Drive',
     },
     'view-segments': {
@@ -75,11 +75,11 @@
 
     if (viewId === 'view-messages') {
       window.MessagesCalculator?.init();
-      window.AmadorProjections?.init();
+      window.ExcambiareProjections?.init();
       window.setTimeout(() => window.dispatchEvent(new Event('resize')), 0);
     }
     if (viewId === 'view-obj') window.setTimeout(() => window.dispatchEvent(new Event('resize')), 0);
-    if (viewId === 'view-history') window.AmadorObjectives?.renderHistory?.();
+    if (viewId === 'view-history') window.ExcambiareObjectives?.renderHistory?.();
     if (viewId === 'view-reports') window.ReportsArchive?.init();
     if (viewId === 'view-segments') window.SegmentationModule?.init();
   }

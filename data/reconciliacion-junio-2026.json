@@ -1,7 +1,7 @@
 {
   "status": "revisado",
-  "source": "Distribucion-amador / Junio",
-  "previousDashboardLocation": "data/amador-ads-2026.json > months[Junio].campaigns",
+  "source": "Distribucion-excambiare / Junio",
+  "previousDashboardLocation": "data/excambiare-ads-2026.json > months[Junio].campaigns",
   "alerts": [
     {
       "previousName": "PADRISIMO",

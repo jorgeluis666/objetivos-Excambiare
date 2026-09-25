@@ -1,5 +1,5 @@
 (function () {
-  const DATA_URL = 'data/amador-drive-reports.json';
+  const DATA_URL = 'data/excambiare-drive-reports.json';
   const MONTHS = [
     'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
     'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
@@ -65,7 +65,7 @@
   }
 
   function detectPeriod(title) {
-    // "Amador_Julio2026" o "1-13Sep2026": se separan letras y numeros para reconocer mes y ano.
+    // "Excambiare_Julio2026" o "1-13Sep2026": se separan letras y numeros para reconocer mes y ano.
     const text = normalize(stripExtension(title))
       .replace(/[_.]+/g, ' ')
       .replace(/(\d)([a-z])/g, '$1 $2')
@@ -337,7 +337,7 @@
   }
 
   async function loadData() {
-    if (window.AMADOR_DRIVE_REPORTS) return window.AMADOR_DRIVE_REPORTS;
+    if (window.EXCAMBIARE_DRIVE_REPORTS) return window.EXCAMBIARE_DRIVE_REPORTS;
     const response = await fetch(DATA_URL, { cache: 'no-store' });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return response.json();

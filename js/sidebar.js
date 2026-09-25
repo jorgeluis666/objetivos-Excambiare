@@ -1,6 +1,6 @@
 (function () {
   const STORAGE_KEY = 'rb-sidebar-collapsed';
-  const LEGACY_STORAGE_KEY = 'amador-sidebar-collapsed';
+  const LEGACY_STORAGE_KEY = 'excambiare-sidebar-collapsed';
 
   function getStoredState() {
     try {

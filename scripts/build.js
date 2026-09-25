@@ -35,12 +35,12 @@ function main() {
   const reportsArchive = readFile('js/reports-archive.js');
   const projections = readFile('js/projections.js');
   const segmentation = readFile('js/segmentation.js');
-  const data = readFile('data/amador-ads-2026.json').replace(/</g, '\\u003c');
-  const juneData = readFile('data/amador-june-sheet-2026.json').replace(/</g, '\\u003c');
-  const julyData = readFile('data/amador-july-sheet-2026.json').replace(/</g, '\\u003c');
-  const septemberData = readFile('data/amador-september-sheet-2026.json').replace(/</g, '\\u003c');
-  const augustData = readFile('data/amador-august-sheet-2026.json').replace(/</g, '\\u003c');
-  const driveReports = readFile('data/amador-drive-reports.json').replace(/</g, '\\u003c');
+  const data = readFile('data/excambiare-ads-2026.json').replace(/</g, '\\u003c');
+  const juneData = readFile('data/excambiare-june-sheet-2026.json').replace(/</g, '\\u003c');
+  const julyData = readFile('data/excambiare-july-sheet-2026.json').replace(/</g, '\\u003c');
+  const septemberData = readFile('data/excambiare-september-sheet-2026.json').replace(/</g, '\\u003c');
+  const augustData = readFile('data/excambiare-august-sheet-2026.json').replace(/</g, '\\u003c');
+  const driveReports = readFile('data/excambiare-drive-reports.json').replace(/</g, '\\u003c');
   const segmentationData = readFile('data/excambiare-segmentation.json').replace(/</g, '\\u003c');
 
   html = html.replace(
@@ -81,20 +81,20 @@ function main() {
   );
   html = html.replace(
     '</head>',
-    `<script>window.AMADOR_ADS_DATA = ${data};window.AMADOR_JUNE_DATA = ${juneData};window.AMADOR_JULY_DATA = ${julyData};window.AMADOR_AUGUST_DATA = ${augustData};window.AMADOR_SEPTEMBER_DATA = ${septemberData};window.AMADOR_DRIVE_REPORTS = ${driveReports};window.EXCAMBIARE_SEGMENTATION = ${segmentationData};</script></head>`
+    `<script>window.EXCAMBIARE_ADS_DATA = ${data};window.EXCAMBIARE_JUNE_DATA = ${juneData};window.EXCAMBIARE_JULY_DATA = ${julyData};window.EXCAMBIARE_AUGUST_DATA = ${augustData};window.EXCAMBIARE_SEPTEMBER_DATA = ${septemberData};window.EXCAMBIARE_DRIVE_REPORTS = ${driveReports};window.EXCAMBIARE_SEGMENTATION = ${segmentationData};</script></head>`
   );
 
   fs.rmSync(DIST_DIR, { recursive: true, force: true });
   fs.mkdirSync(path.join(DIST_DIR, 'data'), { recursive: true });
   fs.writeFileSync(DIST_HTML, html, 'utf8');
   fs.copyFileSync(
-    path.join(ROOT, 'data', 'amador-ads-2026.json'),
-    path.join(DIST_DIR, 'data', 'amador-ads-2026.json')
+    path.join(ROOT, 'data', 'excambiare-ads-2026.json'),
+    path.join(DIST_DIR, 'data', 'excambiare-ads-2026.json')
   );
 
   fs.copyFileSync(
-    path.join(ROOT, 'data', 'amador-drive-reports.json'),
-    path.join(DIST_DIR, 'data', 'amador-drive-reports.json')
+    path.join(ROOT, 'data', 'excambiare-drive-reports.json'),
+    path.join(DIST_DIR, 'data', 'excambiare-drive-reports.json')
   );
 
   fs.copyFileSync(

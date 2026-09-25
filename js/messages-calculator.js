@@ -1,5 +1,5 @@
 (function (global) {
-  const STORAGE_KEY = 'amador_messages_calculator_v1';
+  const STORAGE_KEY = 'excambiare_messages_calculator_v1';
   const DEFAULTS = {
     target: 10000,
     actual: 0,
@@ -212,7 +212,7 @@
   function summaryText() {
     const result = calculate();
     return [
-      'CALCULADORA DE MENSAJES · AMADOR',
+      'CALCULADORA DE MENSAJES · INVERSIONES EXCAMBIARE',
       '',
       `Facturación objetivo: ${money(state.target)}`,
       `Facturación realizada: ${money(state.actual)}`,
@@ -250,7 +250,7 @@
   function exportExcel() {
     const result = calculate();
     const rows = [
-      ['CALCULADORA DE MENSAJES · AMADOR'],
+      ['CALCULADORA DE MENSAJES · INVERSIONES EXCAMBIARE'],
       [],
       ['Facturación objetivo (S/)', state.target],
       ['Facturación realizada (S/)', state.actual],
@@ -284,7 +284,7 @@
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'Calculadora_Mensajes_Amador.xls';
+    link.download = 'Calculadora_Mensajes_Excambiare.xls';
     document.body.appendChild(link);
     link.click();
     link.remove();

@@ -1,6 +1,6 @@
-# Amador | Gasto publicitario 2026
+# Inversiones Excambiare | Gasto publicitario 2026
 
-Dashboard de Agencia Lima Retail para controlar la inversion publicitaria de Amador.
+Dashboard de Agencia Lima Retail para controlar la inversion publicitaria de Inversiones Excambiare.
 
 Version actual: `v1.10.0`.
 
@@ -27,22 +27,22 @@ Los modulos Comparativo YoY, Distribucion, Productos Web y Usuarios y Claves se 
 
 ## Datos
 
-La fuente normalizada del dashboard esta en `data/amador-ads-2026.json`. Junio se cerro el 1 de julio de 2026 con los datos finales de `Distribucion-amador / Junio`; el CSV de respaldo esta en `data/csv-backups/`. Julio se cerro el 1 de septiembre de 2026 con los datos finales de `Distribucion-amador / Julio` (`data/amador-july-sheet-2026.json`). Agosto se cerro el 1 de septiembre de 2026 desde `Distribucion-amador / Agosto` (`data/amador-august-sheet-2026.json`). Septiembre se inicio el 3 de septiembre de 2026 desde `Distribucion-amador / Septiembre` (`data/amador-september-sheet-2026.json`) y se actualizo el 17 de septiembre de 2026 con el acumulado del mes (gasto S/1,778.94; 308 mensajes; 16 reservas); la sincronizacion en vivo apunta a esa pestana por nombre de hoja. El spreadsheet esta compartido como "cualquier persona con el enlace / lector", que es lo que necesita la lectura del CSV publicado; si vuelve a restringirse, el boton Actualizar deja de funcionar y hay que refrescar el JSON a mano. Las pestanas de julio en adelante agrupan anuncios por `Conjunto de anuncios` (RTGT, P. Frio, P. Caliente, etc.), reflejado en el campo `adSet`.
+La fuente normalizada del dashboard esta en `data/excambiare-ads-2026.json`, con el detalle mensual en `data/excambiare-<mes>-sheet-2026.json`. Los archivos estan vacios (sin campanas ni gasto) y quedan listos para cargar los datos de Inversiones Excambiare. Las pestanas de julio en adelante agrupan anuncios por `Conjunto de anuncios`, reflejado en el campo `adSet`.
 
 ## Proyecciones
 
 El modulo Proyecciones (antes Calculadora de Mensajes) lee los datos del modulo Gasto publicitario
-a traves de `window.AmadorObjectives.snapshot()` y proyecta el cierre del mes en curso.
+a traves de `window.ExcambiareObjectives.snapshot()` y proyecta el cierre del mes en curso.
 
 - El mes proyectado es el que corresponde a la fecha de corte (`cutoff`); si no tiene gasto, se usa el ultimo mes con datos.
 - Ritmo diario = acumulado real / dias con datos; la proyeccion mantiene ese ritmo hasta el ultimo dia del mes.
 - La linea de tiempo marca el dia de la ultima actualizacion y compara contra el presupuesto (inversion) o el objetivo de reservas.
-- Cada sincronizacion con Google Sheets emite el evento `amador:data-updated` y el modulo se recalcula solo.
+- Cada sincronizacion con Google Sheets emite el evento `excambiare:data-updated` y el modulo se recalcula solo.
 
 ## Archivo de Reportes (Google Drive)
 
-El modulo lee `data/amador-drive-reports.json`, un catalogo de la carpeta compartida
-`Reportes Amador` (https://drive.google.com/drive/folders/1zqSfc2MlfsWYd3rfYgFWBgQwbrz6-R2b).
+El modulo lee `data/excambiare-drive-reports.json`, un catalogo de la carpeta compartida
+`Reportes Inversiones Excambiare` (pendiente de configurar `folder.id` y `folder.url`).
 Cada entrada guarda `id`, `title`, `mimeType`, `sizeBytes`, `createdTime` y `modifiedTime` tal como los devuelve Drive;
 el tipo de documento, el periodo y la version vigente se deducen en el navegador a partir del nombre del archivo.
 

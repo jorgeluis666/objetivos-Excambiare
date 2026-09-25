@@ -1,0 +1,43 @@
+{
+  "name": "Junio",
+  "spend": 0,
+  "messages": 0,
+  "reservations": 0,
+  "adSpendTotal": 0,
+  "budgetTotal": 0,
+  "balanceTotal": 0,
+  "newDailyTotal": null,
+  "totalObservation": "",
+  "spendBreakdown": {
+    "sales": 0,
+    "branding": 0
+  },
+  "headers": [
+    "Tipo",
+    "Campaña",
+    "Anuncio",
+    "Objetivo",
+    "Reservas",
+    "Objetivo Reservas",
+    "Mensajes",
+    "Costo por mensaje",
+    "Costo por reserva",
+    "Ratio de reservas",
+    "Estado",
+    "Fecha de inicio",
+    "Fecha de fin",
+    "Duración (días)",
+    "Días restantes",
+    "Importe diario",
+    "Presupuesto total x anuncio",
+    "Gasto x Anuncio",
+    "Presupuesto total x campaña",
+    "Gasto x Campaña",
+    "Saldo x anuncio",
+    "Saldo por campaña",
+    "Proyección real de gasto mesual",
+    "Nuevo ppto diario",
+    "Observaciones"
+  ],
+  "campaigns": []
+}

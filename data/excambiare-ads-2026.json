@@ -1,0 +1,120 @@
+{
+  "account": "Inversiones Excambiare",
+  "year": 2026,
+  "cutoff": "2026-09-17",
+  "source": "Distribucion-excambiare (pendiente de carga)",
+  "months": [
+    {
+      "name": "Enero",
+      "spend": 0,
+      "spendBreakdown": {
+        "sales": 0,
+        "branding": 0
+      },
+      "campaigns": []
+    },
+    {
+      "name": "Febrero",
+      "spend": 0,
+      "spendBreakdown": {
+        "sales": 0,
+        "branding": 0
+      },
+      "campaigns": []
+    },
+    {
+      "name": "Marzo",
+      "spend": 0,
+      "spendBreakdown": {
+        "sales": 0,
+        "branding": 0
+      },
+      "campaigns": []
+    },
+    {
+      "name": "Abril",
+      "spend": 0,
+      "spendBreakdown": {
+        "sales": 0,
+        "branding": 0
+      },
+      "campaigns": []
+    },
+    {
+      "name": "Mayo",
+      "spend": 0,
+      "spendBreakdown": {
+        "sales": 0,
+        "branding": 0
+      },
+      "campaigns": []
+    },
+    {
+      "name": "Junio",
+      "spend": 0,
+      "messages": 0,
+      "reservations": 0,
+      "adSpendTotal": 0,
+      "budgetTotal": 0,
+      "balanceTotal": 0,
+      "newDailyTotal": null,
+      "totalObservation": "",
+      "spendBreakdown": {
+        "sales": 0,
+        "branding": 0
+      },
+      "campaigns": []
+    },
+    {
+      "name": "Julio",
+      "spend": 0,
+      "messages": 0,
+      "reservations": 0,
+      "adSpendTotal": 0,
+      "budgetTotal": 0,
+      "balanceTotal": 0,
+      "newDailyTotal": null,
+      "totalObservation": "",
+      "spendBreakdown": {
+        "sales": 0,
+        "branding": 0
+      },
+      "campaigns": [],
+      "reservationGoalTotal": null
+    },
+    {
+      "name": "Agosto",
+      "spend": 0,
+      "messages": 0,
+      "reservations": 0,
+      "adSpendTotal": 0,
+      "budgetTotal": 0,
+      "balanceTotal": 0,
+      "newDailyTotal": null,
+      "totalObservation": "",
+      "spendBreakdown": {
+        "sales": 0,
+        "branding": 0
+      },
+      "campaigns": [],
+      "reservationGoalTotal": null
+    },
+    {
+      "name": "Septiembre",
+      "spend": 0,
+      "messages": 0,
+      "reservations": 0,
+      "adSpendTotal": 0,
+      "budgetTotal": 0,
+      "balanceTotal": 0,
+      "reservationGoalTotal": null,
+      "newDailyTotal": null,
+      "totalObservation": "",
+      "spendBreakdown": {
+        "sales": 0,
+        "branding": 0
+      },
+      "campaigns": []
+    }
+  ]
+}

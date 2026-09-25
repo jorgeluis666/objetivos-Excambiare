@@ -258,7 +258,7 @@
     }
     const note = document.getElementById('projection-note');
     if (note) {
-      note.textContent = `La proyeccion asume que se mantiene el ritmo promedio del mes (${money(projection.byKey.investment.pace)} por dia). Fuente: ${projection.source || 'Distribucion-amador'}.`;
+      note.textContent = `La proyeccion asume que se mantiene el ritmo promedio del mes (${money(projection.byKey.investment.pace)} por dia). Fuente: ${projection.source || 'Distribucion-excambiare'}.`;
     }
     const desc = document.getElementById('projection-desc');
     if (desc) {
@@ -295,8 +295,8 @@
   }
 
   function render() {
-    // El modulo puede abrirse antes de que Gasto publicitario termine de cargar; el evento amador:data-updated lo reintenta.
-    const snapshot = window.AmadorObjectives?.snapshot?.();
+    // El modulo puede abrirse antes de que Gasto publicitario termine de cargar; el evento excambiare:data-updated lo reintenta.
+    const snapshot = window.ExcambiareObjectives?.snapshot?.();
     if (!snapshot) {
       renderWaiting();
       return;
@@ -336,7 +336,7 @@
       input.focus();
     });
 
-    window.addEventListener('amador:data-updated', () => {
+    window.addEventListener('excambiare:data-updated', () => {
       if (state.ready) render();
     });
   }
@@ -349,5 +349,5 @@
     render();
   }
 
-  window.AmadorProjections = { init, render };
+  window.ExcambiareProjections = { init, render };
 })();

@@ -1,5 +1,5 @@
 (function () {
-  const DATA_URL = 'data/amador-june-sheet-2026.json';
+  const DATA_URL = 'data/excambiare-june-sheet-2026.json';
   let goals = [];
 
   function decorate() {
@@ -27,7 +27,7 @@
       style.textContent = '.reservation-value{display:block}.reservation-trend{display:block;margin-top:3px;font-size:9px;font-weight:800;line-height:1.2;white-space:nowrap}.reservation-trend.up{color:#16a34a}.reservation-trend.down{color:#dc2626}';
       document.head.appendChild(style);
     }
-    const data = window.AMADOR_JUNE_DATA
+    const data = window.EXCAMBIARE_JUNE_DATA
       || await fetch(DATA_URL, { cache: 'no-store' }).then(response => response.json());
     goals = data.campaigns.flatMap(campaign =>
       (campaign.ads || []).map(ad => Number(ad.reservationGoal) || null)
