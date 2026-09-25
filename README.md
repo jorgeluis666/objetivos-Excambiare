@@ -18,7 +18,7 @@ El proyecto usa la nomenclatura `vMAJOR.MINOR.PATCH`:
 - Distribucion entre Branding y Ventas.
 - Campanas por mes.
 - Estado, objetivo, presupuesto, gasto, importe diario y URL de anuncios.
-- Proyecciones: cierre de mes estimado con los datos reales y calculadora de inversion por CPL.
+- Proyecciones: cierre de mes estimado con los datos reales.
 - Historico de Campanas finalizadas.
 - Archivo de Reportes: catalogo de los documentos guardados en la carpeta de Google Drive.
 - Segmentacion: publicos de Meta Ads por marca (MEX, Gold Fusion, Sol y Tierra) y comparativo entre marcas.
@@ -31,7 +31,7 @@ La fuente normalizada del dashboard esta en `data/excambiare-ads-2026.json`, con
 
 ## Proyecciones
 
-El modulo Proyecciones (antes Calculadora de Mensajes) lee los datos del modulo Gasto publicitario
+El modulo Proyecciones lee los datos del modulo Gasto publicitario
 a traves de `window.ExcambiareObjectives.snapshot()` y proyecta el cierre del mes en curso.
 
 - El mes proyectado es el que corresponde a la fecha de corte (`cutoff`); si no tiene gasto, se usa el ultimo mes con datos.
