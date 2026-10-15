@@ -5,7 +5,7 @@ de Inversiones Excambiare: **Sol y Tierra**, **Mex Cream** y **Gold Fusion**. Ca
 descargas y su carpeta de reportes; el tablero las muestra por separado (los resultados de una marca no se suman con
 los de otra). Montos en soles (`CURRENCY` en `js/data-source.js`).
 
-Version actual: `v2.0.0` (v1.x era el tablero anterior, sobre una hoja manual).
+Version actual: `v2.0.1` (v1.x era el tablero anterior, sobre una hoja manual).
 
 ## Versionado
 
@@ -153,14 +153,14 @@ npm run build    # genera dist/ con todo incrustado (con DATA_ENDPOINT baja los 
 `data/` y el resto del repo nunca se publican. Con `DASHBOARD_PASSWORD=<clave> npm run build` el `index.html` sale
 cifrado, como en GitHub Pages. Detener live-server antes de compilar si esta sirviendo `dist/`.
 
-## Publicacion en excambiare.limaretail.com (GitHub Pages)
+## Publicacion en inversiones.limaretail.com (GitHub Pages)
 
-URL publica: **https://excambiare.limaretail.com**. Cada push a `main` la actualiza y ademas se vuelve a publicar
+URL publica: **https://inversiones.limaretail.com**. Cada push a `main` la actualiza y ademas se vuelve a publicar
 todos los dias a las 11:30 de Lima con el barrido del dia (`.github/workflows/deploy-pages.yml`).
 
 - Settings > Pages > Source: GitHub Actions. El dominio propio se guarda en **Settings > Pages > Custom domain**
   (con Actions el archivo `CNAME` no basta) y luego **Enforce HTTPS**.
-- DNS en Banahosting (cPanel > Zone Editor > `limaretail.com`): registro **CNAME** `excambiare` ->
+- DNS en Banahosting (cPanel > Zone Editor > `limaretail.com`): registro **CNAME** `inversiones` ->
   `jorgeluis666.github.io`.
 - **Clave:** `scripts/build.js` cifra el tablero completo (datos, JS y URL del Web App) con AES-256-GCM y una llave
   PBKDF2-SHA256 (600 000 iteraciones) derivada del secret **`DASHBOARD_PASSWORD`** (minimo 8 caracteres, sin

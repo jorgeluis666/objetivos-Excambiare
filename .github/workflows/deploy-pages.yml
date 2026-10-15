@@ -1,6 +1,6 @@
 name: Publicar en GitHub Pages
 
-# Publica el tablero en https://excambiare.limaretail.com (dominio configurado en Settings > Pages;
+# Publica el tablero en https://inversiones.limaretail.com (dominio configurado en Settings > Pages;
 # con Actions GitHub ignora el archivo CNAME). Compila con la URL del Web App (secret DATA_ENDPOINT) y
 # cifra dist/index.html con el secret DASHBOARD_PASSWORD: sin esa clave el HTML publicado no se puede leer.
 on:
