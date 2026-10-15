@@ -1,12 +1,9 @@
 (function () {
-  const STORAGE_KEY = 'rb-sidebar-collapsed';
-  const LEGACY_STORAGE_KEY = 'excambiare-sidebar-collapsed';
+  const STORAGE_KEY = 'excambiare-sidebar-collapsed';
 
   function getStoredState() {
     try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored !== null) return stored === '1';
-      return window.localStorage.getItem(LEGACY_STORAGE_KEY) === 'true';
+      return window.localStorage.getItem(STORAGE_KEY) === '1';
     } catch {
       return false;
     }
@@ -20,28 +17,13 @@
     }
   }
 
-  // En la franja minimizada solo quedan los iconos: el nombre de cada módulo
-  // pasa a tooltip y a aria-label para no perderlo.
-  function syncItemLabels(sidebar, collapsed) {
-    sidebar.querySelectorAll('.s-item').forEach(function (item) {
-      const title = item.querySelector('.s-title-nav');
-      const name = title ? title.textContent.trim() : '';
-      if (collapsed && name) {
-        item.setAttribute('title', name);
-        item.setAttribute('aria-label', name);
-      } else {
-        item.removeAttribute('title');
-        item.removeAttribute('aria-label');
-      }
-    });
-  }
-
   function wireSidebarToggle() {
     const shell = document.querySelector('.shell');
+    const sidebar = document.getElementById('sidebar');
     const toggle = document.getElementById('sidebar-toggle');
-    const sidebar = toggle && document.getElementById(toggle.getAttribute('aria-controls'));
-    if (!shell || !toggle || !sidebar) return;
+    if (!shell || !sidebar || !toggle) return;
 
+    const items = Array.from(sidebar.querySelectorAll('.s-item'));
     let collapsed = getStoredState();
 
     function render() {
@@ -51,7 +33,19 @@
       const label = collapsed ? 'Expandir panel' : 'Minimizar panel';
       toggle.setAttribute('aria-label', label);
       toggle.setAttribute('title', label);
-      syncItemLabels(sidebar, collapsed);
+
+      // En la franja minimizada, el nombre del módulo aparece al pasar el mouse.
+      items.forEach(function (item) {
+        const name = item.querySelector('.s-title-nav')?.textContent.trim();
+        // aria-label conserva el nombre accesible cuando el texto queda oculto.
+        if (collapsed && name) {
+          item.setAttribute('title', name);
+          item.setAttribute('aria-label', name);
+        } else {
+          item.removeAttribute('title');
+          item.removeAttribute('aria-label');
+        }
+      });
     }
 
     toggle.addEventListener('click', function () {
@@ -59,7 +53,6 @@
       saveState(collapsed);
       render();
 
-      // Los gráficos recalculan su ancho cuando termina la animación del panel.
       window.setTimeout(function () {
         window.dispatchEvent(new Event('resize'));
       }, 250);

@@ -1,764 +1,1230 @@
 (function () {
-  const DATA_URL = 'data/excambiare-ads-2026.json';
-  const JUNE_DATA_URL = 'data/excambiare-june-sheet-2026.json';
-  const JULY_DATA_URL = 'data/excambiare-july-sheet-2026.json';
-  const AUGUST_DATA_URL = 'data/excambiare-august-sheet-2026.json';
-  const SEPTEMBER_DATA_URL = 'data/excambiare-september-sheet-2026.json';
-  const SHEET_ID = ''; // NEUTRALIZADO: pendiente rehacer sobre la base limpia
-  const SHEET_MONTH = 'Septiembre';
-  const REFRESH_BUTTON_IDS = ['campaigns-refresh-btn', 'projection-refresh-btn'];
-  const LIVE_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_MONTH)}`;
-  const SYNC_INTERVAL_MS = 60 * 60 * 1000;
-  const GOALS_KEY = 'excambiare-reservation-goals-v1';
-  const SHEET_SYNC_ENDPOINT_KEY = 'excambiare-sheet-sync-endpoint-v1';
-  const CHART_COLLAPSED_KEY = 'excambiare-chart-collapsed-v1';
-  const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const SHORT_MONTHS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  const REQUIRED_HEADERS = ['Tipo','Campaña','Anuncio','Objetivo','Reservas','Objetivo Reservas','Mensajes','Costo por mensaje','Costo por reserva','Ratio de reservas','Estado','Fecha de inicio','Fecha de fin','Duración (días)','Días restantes','Importe diario','Presupuesto total x campaña','Gasto x Campaña','Saldo por campaña','Proyección real de gasto mesual'];
-  const OPTIONAL_HEADERS = ['Nuevo ppto diario','Observaciones','Vista previa','Conjunto de anuncios'];
-  const AD_BUDGET_HEADERS = ['Presupuesto total x anuncio','Presupuesto total x conjunto'];
-  const AD_SPENT_HEADERS = ['Gasto x Anuncio','Gasto x conjunto'];
-  const AD_BALANCE_HEADERS = ['Saldo x anuncio','Saldo x conjunto'];
-  const SERIES = {
-    investment: { label: 'Inversion', unit: 'money', color: '#2563eb', fill: 'rgba(37,99,235,.11)' },
-    messages: { label: 'Mensajes', unit: 'count', color: '#16a34a', fill: 'rgba(22,163,74,.10)' },
-    reservations: { label: 'Reservas', unit: 'count', color: '#ea580c', fill: 'rgba(234,88,12,.10)' },
+  // Modulos Gasto publicitario, Anuncios y el Historico de Campanas: indicadores del reporte de Ads calculados con
+  // las descargas de Meta que entrega window.ExcambiareData (js/data-source.js).
+  const TABLE_COMPACT_KEY = 'excambiare-campaigns-compact-v1';
+  // Vistas que comparten el mes elegido (Gasto publicitario y Anuncios).
+  const PERIOD_VIEWS = ['view-obj', 'view-ads'];
+  // Indicador, vista y minimizado del grafico de cada campana, por clave de objetivo.
+  const CAMPAIGN_CHARTS_KEY = 'excambiare-campaign-charts-v1';
+  const PREVIOUS_COLOR = '#94a3b8';
+  const CHEVRON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>';
+  // Pestana "Anual" junto a las de mes: acumula todos los meses del año con descarga.
+  const YEAR_KEY = 'anual';
+  // Pestana "Todos" del Historico de Campanas: todas las descargas, sin filtrar por mes.
+  const HISTORY_ALL = 'todos';
+  // Filtro por estado del Historico. Activa = con gasto o impresiones el ultimo dia con datos.
+  const HISTORY_STATUS = [
+    { key: 'todas', label: 'Todas', one: 'campaña', many: 'campañas' },
+    { key: 'activas', label: 'Activas', one: 'campaña activa', many: 'campañas activas' },
+    { key: 'finalizadas', label: 'Finalizadas', one: 'campaña finalizada', many: 'campañas finalizadas' },
+  ];
+  const MODES = [
+    { key: 'cumulative', label: 'Acumulado del mes' },
+    { key: 'daily', label: 'Por dia' },
+    { key: 'monthly', label: 'Por mes' },
+  ];
+  // Indicadores del grafico de cada campana (Resultados toma el nombre del resultado del objetivo). Se puede elegir
+  // mas de uno; por defecto va el resultado junto a la inversion, que es la relacion que se quiere leer.
+  const CAMPAIGN_METRICS = [
+    { key: 'results', label: 'Resultados', field: 'results', unit: 'count' },
+    { key: 'spend', label: 'Inversion', field: 'spend', unit: 'money' },
+    { key: 'impressions', label: 'Impresiones', field: 'impressions', unit: 'count' },
+    { key: 'reach', label: 'Alcance', field: 'reach', unit: 'count' },
+  ];
+  const DEFAULT_CAMPAIGN_METRICS = ['results', 'spend'];
+  // KPIs de la cabecera de cada campana, con su variacion contra el mes anterior.
+  const CAMPAIGN_KPIS = [
+    { key: 'results', label: null, format: 'count', better: 'up' },
+    { key: 'spend', label: 'Inversion', format: 'money', better: null },
+    { key: 'costPerResult', label: 'Costo por resultado', format: 'unitCost', better: 'down' },
+    { key: 'reach', label: 'Alcance', format: 'count', better: 'up' },
+    { key: 'impressions', label: 'Impresiones', format: 'count', better: 'up' },
+    { key: 'cpm', label: 'CPM', format: 'money', better: 'down' },
+  ];
+  // Indicadores del resumen ejecutivo del reporte. better: hacia donde una variacion es buena (null = neutra).
+  // perMonth: en la vista anual se muestra su promedio mensual (los cocientes llevan su descripcion).
+  const KPIS = [
+    { key: 'spend', label: 'Inversion', hint: 'Importe gastado', better: null, format: 'money', perMonth: true },
+    { key: 'impressions', label: 'Impresiones', hint: 'Veces que se mostraron los anuncios', better: 'up', format: 'count', perMonth: true },
+    { key: 'reach', label: 'Alcance', hint: 'Suma diaria por publico, como en el reporte', better: 'up', format: 'count', perMonth: true },
+    { key: 'frequency', label: 'Frecuencia', hint: 'Impresiones / alcance', better: null, format: 'decimal' },
+    { key: 'cpm', label: 'CPM prom.', hint: 'Costo por mil impresiones', better: 'down', format: 'money' },
+  ];
+
+  const state = {
+    monthKey: null,
+    // Sube con cada cambio de mes; cada vista guarda la version que pinto y se repinta al abrirse si quedo atras.
+    monthVersion: 0,
+    rendered: Object.fromEntries(PERIOD_VIEWS.map(view => [view, -1])),
+    // Año de las pestanas en la vista anual (con un mes elegido manda el año de ese mes).
+    year: null,
+    tableCompact: readSetting(TABLE_COMPACT_KEY, 'false') === 'true',
+    tableFullscreen: false,
+    adsObjective: 'all',
+    historyMonth: HISTORY_ALL,
+    // Año de las pestanas del Historico en "Todos" (con un mes elegido manda el año de ese mes).
+    historyYear: null,
+    historyStatus: 'todas',
+    campaignCharts: readJson(CAMPAIGN_CHARTS_KEY),
+    // Graficos de Chart.js vivos, uno por cuadro de campana (clave del objetivo).
+    charts: new Map(),
+    tabsHome: null,
+    wired: false,
   };
-  const CHART_SERIES_KEY = 'excambiare-chart-series-v1';
-  const state = { data: null, types: readChartSeries(), month: 'Septiembre', chart: null, syncTimer: null, goals: readGoals(), chartCollapsed: readChartCollapsed(), lastSync: null };
 
-  const fmtMoney = value => Number.isFinite(Number(value)) ? `S/. ${Number(value).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
-  const fmtCount = value => Number(value || 0).toLocaleString('es-PE', { maximumFractionDigits: 0 });
-  const fmtRatio = value => Number.isFinite(Number(value)) ? `${Number(value).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : '-';
-  const fmtShort = value => {
-    if (value == null) return '';
-    if (value >= 1000) return `S/. ${(value / 1000).toFixed(2).replace(/0$/, '').replace(/\.0$/, '')}k`;
-    return `S/. ${Math.round(value)}`;
-  };
+  const data = () => window.ExcambiareData;
+  const fmt = (kind, ...args) => data().fmt[kind](...args);
+  const esc = value => data().esc(value);
+  const hasActivity = item => data().metrics.hasActivity(item);
 
-  function readGoals() {
-    try { return JSON.parse(localStorage.getItem(GOALS_KEY) || '{}'); } catch { return {}; }
-  }
-  function readChartCollapsed() {
+  function readSetting(key, fallback) {
     try {
-      const saved = localStorage.getItem(CHART_COLLAPSED_KEY);
-      return saved == null ? true : saved === 'true';
-    } catch { return true; }
-  }
-  function saveChartCollapsed() {
-    try { localStorage.setItem(CHART_COLLAPSED_KEY, String(state.chartCollapsed)); } catch {}
-  }
-  function saveGoals() {
-    try { localStorage.setItem(GOALS_KEY, JSON.stringify(state.goals)); } catch {}
-  }
-  function readChartSeries() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(CHART_SERIES_KEY) || '[]');
-      const valid = Array.isArray(saved) ? saved.filter(key => SERIES[key]) : [];
-      return valid.length ? valid : ['investment'];
-    } catch { return ['investment']; }
-  }
-  function saveChartSeries() {
-    try { localStorage.setItem(CHART_SERIES_KEY, JSON.stringify(state.types)); } catch {}
-  }
-  function syncEndpoint() {
-    const params = new URLSearchParams(window.location.search);
-    const fromUrl = params.get('sheetSyncEndpoint');
-    if (fromUrl) {
-      try { localStorage.setItem(SHEET_SYNC_ENDPOINT_KEY, fromUrl); } catch {}
-      window.history.replaceState({}, document.title, window.location.pathname);
-      return fromUrl.trim();
+      const value = localStorage.getItem(key);
+      return value == null ? fallback : value;
+    } catch {
+      return fallback;
     }
-    return (window.EXCAMBIARE_SHEET_SYNC_ENDPOINT || localStorage.getItem(SHEET_SYNC_ENDPOINT_KEY) || '').trim();
   }
 
-  // ── Custom campaigns / ads (stored in localStorage) ──────────────────────
-  const CUSTOM_KEY = 'excambiare-custom-rows-v1';
-  function readCustom() { try { return JSON.parse(localStorage.getItem(CUSTOM_KEY) || '{}'); } catch { return {}; } }
-  function saveCustom(data) { try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(data)); } catch {} }
-  function getMonthCustom() { return readCustom()[state.month] || { campaigns: [], extraAds: {} }; }
-  function setMonthCustom(fn) {
-    const all = readCustom();
-    all[state.month] = fn(all[state.month] || { campaigns: [], extraAds: {} });
-    saveCustom(all);
+  function saveSetting(key, value) {
+    try { localStorage.setItem(key, String(value)); } catch {}
   }
-  function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
-  function normalizeHeader(value) {
-    return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
-  }
-  function parseNumber(value) {
-    const text = String(value ?? '').trim();
-    if (!text || text === '-' || text === '\u2013') return null;
-    let normalized = text.replace(/S\/?\.?/gi, '').replace(/%/g, '').trim();
-    if (/^-?\d+,\d{1,2}$/.test(normalized)) normalized = normalized.replace(',', '.');
-    else normalized = normalized.replace(/,/g, '');
-    const number = Number(normalized);
-    return Number.isFinite(number) ? number : null;
-  }
-  function parseCsv(text) {
-    const rows = [];
-    let row = [], cell = '', quoted = false;
-    for (let i = 0; i < text.length; i += 1) {
-      const char = text[i];
-      const next = text[i + 1];
-      if (quoted && char === '"' && next === '"') { cell += '"'; i += 1; continue; }
-      if (char === '"') { quoted = !quoted; continue; }
-      if (!quoted && char === ',') { row.push(cell); cell = ''; continue; }
-      if (!quoted && (char === '\n' || char === '\r')) {
-        if (char === '\r' && next === '\n') i += 1;
-        row.push(cell); rows.push(row); row = []; cell = ''; continue;
-      }
-      cell += char;
-    }
-    if (cell || row.length) { row.push(cell); rows.push(row); }
-    return rows.filter(items => items.some(item => String(item).trim() !== ''));
-  }
-  function headerMap(headers) {
-    const map = {};
-    headers.forEach((header, index) => { map[normalizeHeader(header)] = index; });
-    return map;
-  }
-  function get(row, map, name) { return row[map[normalizeHeader(name)]] ?? ''; }
-  function getAny(row, map, names) {
-    const name = names.find(item => map[normalizeHeader(item)] != null);
-    return name ? get(row, map, name) : '';
-  }
-  function validateHeaders(headers) {
-    const map = headerMap(headers);
-    const missing = REQUIRED_HEADERS.filter(name => map[normalizeHeader(name)] == null);
-    [AD_BUDGET_HEADERS, AD_SPENT_HEADERS, AD_BALANCE_HEADERS].forEach(group => { if (!group.some(name => map[normalizeHeader(name)] != null)) missing.push(group.join(' / ')); });
-    if (missing.length) throw new Error(`Cabeceras faltantes: ${missing.join(', ')}`);
-    return map;
-  }
-  function dateLabel(value) {
-    const text = String(value || '').trim();
-    const match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-    if (!match) return text || null;
-    const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-    return `${match[1].padStart(2, '0')}-${months[Number(match[2]) - 1] || 'Mes'}`;
-  }
-  function goalKey(campaign, ad) { return `${campaign}::${ad}`; }
-  function effectiveGoal(campaign, ad) {
-    const saved = state.goals[goalKey(campaign.name, ad.name)];
-    return saved === '' || saved == null ? ad.reservationGoal : Number(saved);
-  }
-  function sourceMonth(name) { return state.data.months.find(month => month.name === name); }
-  function cloneData(data) { return JSON.parse(JSON.stringify(data)); }
-  function valueFor(name, type) {
-    const month = sourceMonth(name);
-    if (!month) return null;
-    if (type === 'investment') return month.spend;
-    if (Number.isFinite(Number(month[type]))) return Number(month[type]);
-    const field = type === 'reservations' ? 'reservas' : 'messages';
-    const ads = (month.campaigns || []).flatMap(campaign => campaign.ads || []);
-    if (!ads.some(ad => ad[field] != null)) return null;
-    return ads.reduce((total, ad) => total + Number(ad[field] || 0), 0);
-  }
-  function formatSeriesValue(value, series, short = false) {
-    if (value == null) return '';
-    if (series.unit === 'money') return short ? fmtShort(value) : fmtMoney(value);
-    return fmtCount(value);
-  }
-  function isTypeHeader(cell) {
-    // Al exportar, el titulo del mes queda fusionado con la cabecera "Tipo".
-    return /(^|\s)tipo$/.test(normalizeHeader(cell));
-  }
-  function sheetToMonthData(rows) {
-    const headerIndex = rows.findIndex(row => row.some(isTypeHeader) && row.some(cell => normalizeHeader(cell) === 'estado'));
-    if (headerIndex < 0) throw new Error('No se encontro la fila de cabeceras del sheet.' );
-    const headers = rows[headerIndex].map(cell => (isTypeHeader(cell) ? 'Tipo' : cell));
-    const map = validateHeaders(headers);
-    const campaigns = [];
-    let current = null;
-    let currentAdSet = null;
-    let totals = null;
-    rows.slice(headerIndex + 1).forEach(row => {
-      const first = String(get(row, map, 'Tipo')).trim();
-      const campaignName = String(get(row, map, 'Campaña')).trim();
-      const adSetName = String(get(row, map, 'Conjunto de anuncios')).trim();
-      const adName = String(get(row, map, 'Anuncio')).trim();
-      if (!first && !campaignName && !adSetName && !adName) return;
-      if (first.toLowerCase().startsWith('total')) {
-        totals = row;
-        return;
-      }
-      if (campaignName) {
-        current = {
-          name: campaignName,
-          type: first,
-          status: String(get(row, map, 'Estado')).trim(),
-          objective: String(get(row, map, 'Objetivo')).trim() || null,
-          budget: parseNumber(get(row, map, 'Presupuesto total x campaña')),
-          spent: parseNumber(get(row, map, 'Gasto x Campaña')),
-          balance: parseNumber(get(row, map, 'Saldo por campaña')),
-          realBalance: null,
-          reservationGoal: parseNumber(get(row, map, 'Objetivo Reservas')),
-          reservas: 0,
-          messages: 0,
-          ads: []
-        };
-        campaigns.push(current);
-        currentAdSet = null;
-      }
-      if (adSetName) currentAdSet = adSetName;
-      if (!current || !adName) return;
-      const ad = {
-        name: currentAdSet ? `${currentAdSet} · ${adName}` : adName,
-        adSet: currentAdSet,
-        objective: String(get(row, map, 'Objetivo')).trim() || null,
-        status: String(get(row, map, 'Estado')).trim(),
-        reservas: parseNumber(get(row, map, 'Reservas')) || 0,
-        reservationGoal: parseNumber(get(row, map, 'Objetivo Reservas')),
-        messages: parseNumber(get(row, map, 'Mensajes')) || 0,
-        costPerMessage: parseNumber(get(row, map, 'Costo por mensaje')),
-        costPerReservation: parseNumber(get(row, map, 'Costo por reserva')),
-        reservationRatio: parseNumber(get(row, map, 'Ratio de reservas')),
-        startDate: dateLabel(get(row, map, 'Fecha de inicio')),
-        endDate: dateLabel(get(row, map, 'Fecha de fin')),
-        duration: parseNumber(get(row, map, 'Duración (días)')),
-        daysRemaining: parseNumber(get(row, map, 'Días restantes')),
-        dailyAmount: parseNumber(get(row, map, 'Importe diario')),
-        budget: parseNumber(getAny(row, map, AD_BUDGET_HEADERS)),
-        spent: parseNumber(getAny(row, map, AD_SPENT_HEADERS)),
-        balance: parseNumber(getAny(row, map, AD_BALANCE_HEADERS)),
-        newDailyAmount: parseNumber(get(row, map, 'Nuevo ppto diario')),
-        observation: String(get(row, map, 'Observaciones')).trim() || null,
-        adUrl: String(get(row, map, 'Vista previa')).trim() || null
-      };
-      if (ad.costPerMessage == null && ad.messages > 0 && ad.spent != null) ad.costPerMessage = ad.spent / ad.messages;
-      if (ad.costPerReservation == null && ad.reservas > 0 && ad.spent != null) ad.costPerReservation = ad.spent / ad.reservas;
-      if (ad.reservationRatio == null && ad.messages > 0) ad.reservationRatio = ad.reservas / ad.messages * 100;
-      current.ads.push(ad);
-      current.reservas += ad.reservas;
-      current.messages += ad.messages;
-      if (ad.observation && !current.observation) current.observation = ad.observation;
-    });
-    const allAds = campaigns.flatMap(campaign => campaign.ads);
-    const round2 = value => Math.round(Number(value) * 100) / 100;
-    const adSpendTotal = parseNumber(totals && getAny(totals, map, AD_SPENT_HEADERS)) ?? round2(allAds.reduce((sum, ad) => sum + Number(ad.spent || 0), 0));
-    const spend = parseNumber(totals && get(totals, map, 'Gasto x Campaña')) ?? round2(campaigns.reduce((sum, campaign) => sum + Number(campaign.spent || 0), 0));
-    const budgetTotal = parseNumber(totals && get(totals, map, 'Presupuesto total x campaña')) ?? round2(campaigns.reduce((sum, campaign) => sum + Number(campaign.budget || 0), 0));
-    const balanceTotal = parseNumber(totals && get(totals, map, 'Saldo por campaña')) ?? round2(campaigns.reduce((sum, campaign) => sum + Number(campaign.balance || 0), 0));
-    const brandingSpend = round2(campaigns.filter(campaign => campaign.ads.some(ad => normalizeHeader(ad.objective).includes('reconocimiento'))).reduce((sum, campaign) => sum + Number(campaign.spent || 0), 0));
-    return {
-      name: SHEET_MONTH,
-      spend,
-      messages: allAds.reduce((sum, ad) => sum + Number(ad.messages || 0), 0),
-      reservations: allAds.reduce((sum, ad) => sum + Number(ad.reservas || 0), 0),
-      adSpendTotal,
-      budgetTotal,
-      balanceTotal,
-      reservationGoalTotal: parseNumber(totals && get(totals, map, 'Objetivo Reservas')),
-      newDailyTotal: parseNumber(totals && get(totals, map, 'Nuevo ppto diario')) ?? round2(allAds.reduce((sum, ad) => sum + Number(ad.newDailyAmount || 0), 0)),
-      totalObservation: String((totals && get(totals, map, 'Observaciones')) || '').trim(),
-      spendBreakdown: { sales: round2(spend - brandingSpend), branding: brandingSpend },
-      campaigns,
-      headers: headers.map(header => String(header || '').trim()).filter(Boolean),
-      source: `Google Sheets / Distribucion-excambiare / ${SHEET_MONTH}`
-    };
-  }
-  function mergeSheetMonth(monthData, source = 'Google Sheets') {
-    const data = cloneData(state.data);
-    const index = data.months.findIndex(month => month.name === monthData.name);
-    if (index >= 0) data.months[index] = monthData;
-    else data.months.push(monthData);
-    data.cutoff = new Date().toISOString().slice(0, 10);
-    data.source = source;
-    state.data = data;
-  }
-  async function fetchLiveSheet() {
-    const response = await fetch(`${LIVE_CSV_URL}&cacheBust=${Date.now()}`, { cache: 'no-store' });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return sheetToMonthData(parseCsv(await response.text()));
-  }
-  function setRefreshButtonState(isLoading) {
-    REFRESH_BUTTON_IDS.forEach(id => {
-      const button = document.getElementById(id);
-      if (!button) return;
-      button.disabled = Boolean(isLoading);
-      button.textContent = isLoading ? 'Actualizando...' : 'Actualizar';
-    });
-  }
-  async function syncLiveSheet({ silent = false, manual = false } = {}) {
-    if (manual) {
-      setRefreshButtonState(true);
-      updateSyncLabel('Actualizando datos desde Google Sheets...');
-    }
+
+  function readJson(key) {
     try {
-      const monthData = await fetchLiveSheet();
-      mergeSheetMonth(monthData);
-      state.lastSync = new Date();
-      renderAll();
-      updateSyncLabel('Datos sincronizados desde Google Sheets');
-      return true;
-    } catch (error) {
-      if (!silent) console.warn('[excambiare] No se pudo sincronizar Google Sheets:', error);
-      updateSyncLabel(manual ? 'No se pudo actualizar desde Google Sheets' : 'Datos locales, esperando sincronizacion');
-      return false;
-    } finally {
-      if (manual) setRefreshButtonState(false);
+      const value = JSON.parse(readSetting(key, '{}'));
+      return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    } catch {
+      return {};
     }
   }
-  function updateSyncLabel(text) {
-    const label = document.getElementById('topbar-status');
-    if (label && state.month === SHEET_MONTH) label.textContent = text;
+
+  // Reemplaza el HTML de host sin sacar el foco del control que se estaba usando (pestana, chip o filtro).
+  function replaceHtml(host, html) {
+    data().keepFocus(host, () => { host.innerHTML = html; });
   }
-  function renderKpis() {
-    const month = sourceMonth(state.month);
+
+  // Años con meses con datos, del mas antiguo al mas reciente. Con mas de uno las pestanas llevan encima los años.
+  function dataYears(snapshot) {
+    return [...new Set(snapshot.months.filter(month => month.hasData).map(month => month.year))];
+  }
+
+  // El año pedido si tiene meses con datos; si no, el del ultimo mes con datos.
+  function validYear(snapshot, year) {
+    return dataYears(snapshot).includes(year) ? year : snapshot.year;
+  }
+
+  function latestMonthOf(snapshot, year) {
+    return snapshot.months.filter(month => month.hasData && month.year === year).pop() || null;
+  }
+
+  function selectedMonth() {
+    const snapshot = data()?.snapshot();
+    if (!snapshot) return null;
+    const month = data().monthByKey(state.monthKey);
+    return month && month.hasData ? month : data().latestMonth();
+  }
+
+  // Año de las pestanas de Gasto publicitario: el del mes elegido o, en la vista anual, el año elegido.
+  function viewYear() {
+    const snapshot = data().snapshot();
+    if (state.monthKey === YEAR_KEY) return validYear(snapshot, state.year);
+    return selectedMonth()?.year ?? snapshot.year;
+  }
+
+  function annualView() {
+    return state.monthKey === YEAR_KEY && Boolean(data()?.metrics.yearPeriod(viewYear()));
+  }
+
+  function currentPeriod() {
+    return annualView() ? data().metrics.yearPeriod(viewYear()) : data().metrics.period(selectedMonth());
+  }
+
+  // "▲ 12,3% vs 1-20 Agosto". El color depende de si subir es bueno para ese indicador. Sin compareLabel queda
+  // solo "▲ 12,3%" (filas de KPIs cuyo subtitulo ya dice contra que periodo se compara).
+  function deltaHtml(current, previous, better, compareLabel) {
+    const change = data().metrics.change(current, previous);
+    if (change == null) return compareLabel ? `<small class="delta flat">Sin dato en ${esc(compareLabel)}</small>` : '';
+    const direction = Math.abs(change) < 0.05 ? 'flat' : change > 0 ? 'up' : 'down';
+    const tone = direction === 'flat' || !better ? 'flat' : direction === better ? 'good' : 'bad';
+    const arrow = direction === 'up' ? '&#9650;' : direction === 'down' ? '&#9660;' : '&#9679;';
+    return `<small class="delta ${tone}">${arrow} ${fmt('pct', Math.abs(change))}${compareLabel ? ` vs ${esc(compareLabel)}` : ''}</small>`;
+  }
+
+  // Celda de variacion de una tabla con mes anterior: "Nuevo" si no corria (previous null), pastilla verde o roja si no.
+  function variationCell(current, previous) {
+    if (previous == null) return '<span class="delta-pill new">Nuevo</span>';
+    const change = data().metrics.change(current, previous);
+    if (change == null) return '<span class="no-data">-</span>';
+    return `<span class="delta-pill ${change >= 0 ? 'good' : 'bad'}">${change >= 0 ? '&#9650;' : '&#9660;'} ${fmt('pct', Math.abs(change), 0)}</span>`;
+  }
+
+  // Nombre del anuncio con enlace a su vista previa en Meta (sin enlace queda el nombre solo).
+  function adNameLink(ad) {
+    const name = esc(ad.ad || '(sin nombre)');
+    const url = data().safeUrl(ad.preview);
+    return url
+      ? `<a class="ad-link" href="${url}" target="_blank" rel="noopener noreferrer" title="Ver el anuncio en Meta">${name}<span class="ad-link-ic" aria-hidden="true">&#8599;</span></a>`
+      : name;
+  }
+
+  // Dias activos del anuncio: "3-18 Sep" en un mes, rango de fechas en la vista anual.
+  function adDays(ad, period) {
+    if (period.annual) {
+      if (!ad.firstDate) return '-';
+      return ad.firstDate === ad.lastDate ? shortDate(ad.firstDate, false) : `${shortDate(ad.firstDate, false)} - ${shortDate(ad.lastDate, false)}`;
+    }
+    if (!ad.firstDay) return '-';
+    const monthShort = period.month?.shortName;
+    return ad.firstDay === ad.lastDay ? `${ad.firstDay} ${monthShort}` : `${ad.firstDay}-${ad.lastDay} ${monthShort}`;
+  }
+
+  // ── Pestanas de mes y periodo ────────────────────────────────────────────
+  // Enero a Diciembre del año dado y una ultima pestana que junta todos los meses (Anual aqui, Todos en el
+  // Historico). Con descargas de mas de un año, encima van los años a todo el ancho de la grilla de pestanas.
+  function monthTabsHtml(snapshot, year, selectedKey, last) {
+    const years = dataYears(snapshot);
+    const yearTabs = years.length > 1
+      ? `<div class="year-tabs" role="group" aria-label="Año">${years.map(item => `<button type="button" class="month-tab ${item === year ? 'active' : ''}" data-year="${item}" aria-pressed="${item === year}">${item}</button>`).join('')}</div>`
+      : '';
+    return yearTabs + data().MONTHS.map((name, index) => {
+      const key = `${year}-${String(index + 1).padStart(2, '0')}`;
+      const month = data().monthByKey(key);
+      const available = Boolean(month?.hasData);
+      const selected = selectedKey === key;
+      return `<button type="button" class="month-tab ${selected ? 'active' : ''}" data-month="${key}" aria-pressed="${selected}" ${available ? '' : 'disabled title="Sin descarga de Meta en la carpeta"'}>${name}${key === snapshot.latestKey ? '<span class="current-dot"></span>' : ''}</button>`;
+    }).join('') + `<button type="button" class="month-tab ${last.selected ? 'active' : ''}" data-month="${last.key}" aria-pressed="${last.selected}" title="${esc(last.available ? last.title : 'Sin descargas de Meta en la carpeta')}"${last.available ? '' : ' disabled'}>${last.label}</button>`;
+  }
+
+  // Las pestanas de Gasto publicitario (month-tabs) y las de Anuncios (ads-month-tabs) muestran el mismo mes.
+  function renderTabs(snapshot, hostId = 'month-tabs') {
+    const host = document.getElementById(hostId);
+    if (!host) return;
+    const annual = annualView();
+    const year = viewYear();
+    replaceHtml(host, monthTabsHtml(snapshot, year, annual ? null : selectedMonth()?.key, {
+      key: YEAR_KEY,
+      label: 'Anual',
+      title: `Acumulado ${year} de los meses con descarga de Meta`,
+      available: Boolean(data().metrics.yearPeriod(year)),
+      selected: annual,
+    }));
+  }
+
+  // prefix '' es Gasto publicitario y 'ads-' es Anuncios (mismos textos salvo el subtitulo de la vista anual).
+  function renderPeriod(period, prefix = '') {
+    const title = document.getElementById(`${prefix}period-title`);
+    const sub = document.getElementById(`${prefix}period-sub`);
+    if (!title || !sub) return;
+    if (!period) {
+      title.textContent = 'Sin datos de Meta';
+      sub.textContent = 'No hay descargas con gasto en la carpeta de Drive.';
+      return;
+    }
+    if (period.annual) {
+      const count = period.months.length;
+      // Un año anterior al del ultimo mes con datos ya termino aunque falte la descarga completa de diciembre.
+      const closed = period.closed || period.year < data().snapshot().year;
+      title.textContent = `Periodo: ${period.label} ${period.year}${closed ? '' : ' (año en curso)'}`;
+      sub.textContent = prefix
+        ? 'Acumulado del año: sin periodo anterior para comparar'
+        : `Acumulado de ${count} ${count === 1 ? 'mes' : 'meses'} con descarga de Meta (${period.months.map(month => month.shortName).join(', ')}). Sin año anterior para comparar.`;
+      return;
+    }
+    const month = period.month;
+    title.textContent = `Periodo: ${period.label} ${month.year}${period.closed ? '' : ' (mes en curso)'}`;
+    // El archivo del mes y el aviso de descarga incompleta viven en el estado de la barra superior.
+    sub.textContent = period.compare ? `Comparacion vs ${period.compare.label}` : 'Sin mes anterior para comparar';
+  }
+
+  // ── Resumen ejecutivo ────────────────────────────────────────────────────
+  function renderKpis(period) {
     const host = document.getElementById('kpi-strip');
-    if (!host || !month) return;
-    const investment = Number(month.spend || 0);
-    const messages = Number(month.messages ?? valueFor(state.month, 'messages') ?? 0);
-    const reservations = Number(month.reservations ?? valueFor(state.month, 'reservations') ?? 0);
-    const costMessage = messages > 0 ? investment / messages : null;
-    const costReservation = reservations > 0 ? investment / reservations : null;
-    const cards = [
-      ['Inversión', fmtMoney(investment), 'Gasto total'],
-      ['Mensajes', fmtCount(messages), 'Conversaciones iniciadas'],
-      ['Costo por mensaje', fmtMoney(costMessage), 'Inversión / mensajes'],
-      ['Reservas', fmtCount(reservations), 'Conversiones de reserva'],
-      ['Costo por reserva', fmtMoney(costReservation), 'Inversión / reservas']
-    ];
-    host.innerHTML = cards.map(([label, value, meta]) => `<div class="kpi-pill"><span>${label}</span><strong>${value}</strong><small>${meta}</small></div>`).join('');
-  }
-  function renderTabs() {
-    const host = document.getElementById('month-tabs');
-    host.innerHTML = MONTHS.map(name => {
-      const available = !!sourceMonth(name);
-      const selected = name === state.month;
-      return `<button type="button" class="month-tab ${selected ? 'active' : ''}" data-month="${name}" ${available ? '' : 'disabled'}>${name}${name === SHEET_MONTH ? '<span class="current-dot"></span>' : ''}</button>`;
+    if (!host) return;
+    if (!period) {
+      host.innerHTML = '';
+      return;
+    }
+    const current = data().metrics.summarize(period.rows);
+    const previous = period.compare ? data().metrics.summarize(period.compare.rows) : null;
+    const average = period.annual ? monthlyAverage(period) : null;
+    host.innerHTML = KPIS.map(kpi => {
+      let note = `<small>${kpi.hint}</small>`;
+      // Sin valor en el periodo (por ejemplo, ninguna campana de mensajes) queda la explicacion del indicador: "Sin dato
+      // en <mes anterior>" diria que el que falta es el otro.
+      if (previous && current[kpi.key] != null) note = deltaHtml(current[kpi.key], previous[kpi.key], kpi.better, period.compare.label);
+      else if (average && kpi.perMonth) note = `<small title="${esc(average.basis)}">Prom. mensual: ${fmt(kpi.format, average[kpi.key])}</small>`;
+      return `
+      <div class="kpi-pill">
+        <span>${kpi.label}</span>
+        <strong>${fmt(kpi.format, current[kpi.key])}</strong>
+        ${note}
+      </div>`;
     }).join('');
-    host.querySelectorAll('.month-tab:not(:disabled)').forEach(button => {
-      button.addEventListener('click', () => {
-        state.month = button.dataset.month;
-        host.querySelectorAll('.month-tab').forEach(tab => tab.classList.toggle('active', tab.dataset.month === state.month));
-        renderAll(false);
-      });
-    });
   }
-  function statusClass(status) {
-    const normalized = String(status || '').toLowerCase();
-    if (normalized === 'activa' || normalized === 'activo') return 'green';
-    if (normalized === 'finalizada' || normalized === 'finalizado' || normalized === 'off') return 'red';
-    return 'muted';
+
+  // Promedio por mes de la vista anual. Mientras haya meses cerrados el mes en curso queda fuera: un mes a medias
+  // bajaria el promedio.
+  function monthlyAverage(period) {
+    const closed = period.months.filter(month => month.complete || month.past);
+    const months = closed.length ? closed : period.months;
+    const totals = months.map(month => data().metrics.summarize(month.rows));
+    const average = Object.fromEntries(KPIS.map(kpi => [kpi.key, totals.reduce((sum, item) => sum + (item[kpi.key] || 0), 0) / months.length]));
+    average.basis = `Promedio de ${months.map(month => month.name).join(', ')}`;
+    return average;
   }
-  function isFinishedStatus(status) {
-    const normalized = String(status || '').toLowerCase();
-    return normalized === 'off' || normalized.includes('finaliz') || normalized.includes('desactiva');
+
+  // Meses del año en que corrio un objetivo (vista anual, en lugar de la comparacion con el mes anterior).
+  function objectiveMonths(period, key) {
+    const months = period.months.filter(month => month.rows.some(row => row.group === key && hasActivity(row)));
+    if (months.length === period.months.length) return `Activo en los ${months.length} ${months.length === 1 ? 'mes' : 'meses'}`;
+    return `Activo en ${months.map(month => month.shortName).join(', ') || 'ningun mes'}`;
   }
-  function renderReservationProgress(value, goal) {
-    if (goal == null || Number(goal) <= 0) return `${value}`;
-    const reached = Number(value) >= Number(goal);
-    const label = reached ? 'Sobre el objetivo' : 'Debajo del objetivo';
-    return `<span class="reservation-value">${value}</span><span class="reservation-trend ${reached ? 'up' : 'down'}" title="${label}: ${value}/${goal}" aria-label="${label}: ${value} de ${goal}">${reached ? '▲' : '▼'} Objetivo: ${goal}</span>`;
+
+  // ── Graficos lineales ────────────────────────────────────────────────────
+  // Los de cada cuadro de campana. metric: { key, label, field, unit, color, group }; group es el objetivo del
+  // cuadro y limita las filas a las suyas.
+  function metricFilter(metric) {
+    return row => row.group === metric.group;
   }
-  function renderTrend(reservas, goal) {
-    if (goal == null || Number(goal) <= 0) return '';
-    const diff = Number(reservas) - Number(goal);
-    const reached = diff >= 0;
-    const label = reached ? 'Sobre el objetivo' : 'Debajo del objetivo';
-    const detail = reached ? `Sobre: ${diff}` : `Faltan: ${Math.abs(diff)}`;
-    return `<span class="reservation-trend ${reached ? 'up' : 'down'}" title="${label}: ${reservas}/${goal}" aria-label="${label}: ${reservas} de ${goal}">${reached ? '&#9650;' : '&#9660;'} ${detail} | Objetivo: ${goal}</span>`;
+
+  // Un mes sin gasto ni impresiones del objetivo queda como hueco, igual que un mes sin descarga.
+  function monthlyValue(month, metric) {
+    if (!month?.hasData) return null;
+    const rows = month.rows.filter(metricFilter(metric));
+    if (!rows.some(hasActivity)) return null;
+    return rows.reduce((sum, row) => sum + row[metric.field], 0);
   }
-  function renderDeadline(endDate, days) {
-    if (!endDate) return '-';
-    if (days == null) return endDate;
-    const counterClass = days === 0 ? 'closed' : days <= 3 ? 'urgent' : '';
-    const label = days === 0 ? 'Plazo finalizado' : `${days} ${days === 1 ? 'día restante' : 'días restantes'}`;
-    return `${endDate}<span class="days-counter ${counterClass}">${label}</span>`;
-  }
-  function renderGoalInput(campaign, ad) {
-    const value = effectiveGoal(campaign, ad);
-    return `<input class="reservation-goal-input" type="number" min="0" step="1" value="${value ?? ''}" data-campaign="${campaign.name}" data-ad="${ad.name}" aria-label="Objetivo Reservas ${campaign.name} ${ad.name}">`;
-  }
-  function goalValue(campaign, ad) {
-    return Number(effectiveGoal(campaign, ad || {}) || 0);
-  }
-  function campaignGoal(campaign, ads) {
-    const saved = state.goals[goalKey(campaign.name, '__campaign__')];
-    if (saved !== '' && saved != null) return Number(saved);
-    const rows = ads && ads.length ? ads : (campaign.ads || []);
-    return rows.reduce((sum, ad) => sum + goalValue(campaign, ad), 0);
-  }
-  function renderCampaignGoalInput(campaign, ads) {
-    const value = campaignGoal(campaign, ads);
-    return `<input class="reservation-goal-input" type="number" min="0" step="1" value="${value || ''}" data-campaign="${campaign.name}" data-ad="__campaign__" aria-label="Objetivo Reservas ${campaign.name}">`;
-  }
-  function updateAdGoal(campaignName, adName, value) {
-    const month = sourceMonth(state.month);
-    const campaign = month?.campaigns?.find(item => item.name === campaignName);
-    if (!campaign) return;
-    const numberValue = value === '' ? null : Number(value);
-    if (adName === '__campaign__') {
-      const firstAd = campaign.ads?.[0];
-      if (firstAd) firstAd.reservationGoal = Number.isFinite(numberValue) ? numberValue : null;
-      (campaign.ads || []).slice(1).forEach(item => { item.reservationGoal = null; });
-      campaign.reservationGoal = firstAd?.reservationGoal ?? null;
-      Object.keys(state.goals).forEach(key => { if (key.startsWith(`${campaignName}::`) && key !== goalKey(campaignName, '__campaign__')) delete state.goals[key]; });
-    } else {
-      const ad = campaign.ads?.find(item => item.name === adName);
-      if (!ad) return;
-      ad.reservationGoal = Number.isFinite(numberValue) ? numberValue : null;
-      campaign.reservationGoal = campaign.ads?.find(item => item?.reservationGoal != null)?.reservationGoal ?? null;
+
+  // Total de cada mes del año, o dia a dia del mes (acumulado o no) frente al mes anterior en el mismo dia.
+  // compare = false deja solo el mes elegido (varios indicadores a la vez).
+  function lineSeries(metric, modeKey, month, compare = true) {
+    if (modeKey === 'monthly') {
+      const year = viewYear();
+      return {
+        labels: data().SHORT_MONTHS,
+        datasets: [{ label: metric.label, unit: metric.unit, data: data().MONTHS.map((_, index) => monthlyValue(data().monthByKey(`${year}-${String(index + 1).padStart(2, '0')}`), metric)), borderColor: metric.color, backgroundColor: `${metric.color}1a`, fill: true, borderWidth: 2.5, pointRadius: 5, pointHoverRadius: 7, pointBackgroundColor: metric.color, tension: 0.25, spanGaps: false, valueLabels: true }],
+        legend: [`<span><i class="legend-line" style="background:${metric.color}"></i><b>${esc(metric.label)} por mes</b></span>`],
+      };
     }
-    month.reservationGoalTotal = (month.campaigns || []).reduce((sum, item) => sum + campaignGoal(item, item.ads || []), 0);
-  }
-  async function pushGoalToSheet(input) {
-    const endpoint = syncEndpoint();
-    if (!endpoint) {
-      updateSyncLabel('Objetivo actualizado localmente; falta endpoint de escritura a Sheets');
-      return;
-    }
-    const payload = {
-      action: 'updateReservationGoal',
-      spreadsheetId: SHEET_ID,
-      sheetName: SHEET_MONTH,
-      campaign: input.dataset.campaign,
-      ad: input.dataset.ad,
-      campaignLevel: input.dataset.ad === '__campaign__',
-      value: input.value === '' ? '' : Number(input.value)
+    const cumulative = modeKey === 'cumulative';
+    const transform = values => (cumulative ? data().metrics.cumulative(values) : values);
+    const series = {
+      labels: Array.from({ length: month.daysInMonth }, (_, index) => `${index + 1}`),
+      datasets: [{ label: compare ? month.name : metric.label, unit: metric.unit, data: transform(data().metrics.dailyValues(month, metric.field, metricFilter(metric))), borderColor: metric.color, backgroundColor: `${metric.color}14`, fill: cumulative, borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 4, tension: 0.2 }],
+      legend: [`<span><i class="legend-line" style="background:${metric.color}"></i><b>${esc(month.name)} ${month.year}</b></span>`],
     };
-    updateSyncLabel('Enviando objetivo a Google Sheets...');
-    try {
-      await fetch(endpoint, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload)
-      });
-      updateSyncLabel('Objetivo enviado a Google Sheets');
-      setTimeout(() => syncLiveSheet({ silent: true }), 1800);
-    } catch (error) {
-      console.warn('[excambiare] No se pudo enviar el objetivo a Google Sheets:', error);
-      updateSyncLabel('Cambio local; error al enviar a Google Sheets');
-    }
-  }
-  function renderCampaigns() {
-    const month = sourceMonth(state.month);
-    const baseCampaigns = month.campaigns || [];
-    const monthCustom = getMonthCustom();
-    const campaigns = [...baseCampaigns, ...monthCustom.campaigns];
-    const active = baseCampaigns.filter(c => ['activa', 'activo'].includes(String(c.status || '').toLowerCase())).length;
-    document.getElementById('campaigns-title').textContent = `Campanas de ${month.name} 2026`;
-    document.getElementById('campaigns-sub').textContent = baseCampaigns.length ? `${active} activas de ${baseCampaigns.length} campanas registradas.` : 'Sin detalle de campanas en el archivo fuente.';
-    const note = document.getElementById('campaigns-note');
-    if (note) {
-      const observation = String(month.totalObservation || '').trim();
-      note.textContent = observation ? `* ${observation}` : '';
-      note.classList.toggle('visible', Boolean(observation));
-    }
-    const body = document.getElementById('campaigns-body');
-    if (!campaigns.length) { body.innerHTML = '<tr><td colspan="23" class="table-empty">Sin campanas registradas para este mes.</td></tr>'; return; }
-    const rows = [];
-    let totalReservas = 0;
-    let totalGoals = 0;
-    let totalMessages = 0;
-    for (const c of campaigns) {
-      const isCustomC = !!(c._id);
-      const baseAds = c.ads?.length ? c.ads : [null];
-      const extraAds = (monthCustom.extraAds || {})[c.name] || [];
-      const ads = [...baseAds, ...extraAds];
-      const span = ads.length;
-      const campaignTotalReservas = ads.reduce((s, ad) => s + Number((ad || {}).reservas ?? (ads.length === 1 ? c.reservas : 0) ?? 0), 0);
-      const campaignTotalGoal = campaignGoal(c, ads);
-      totalGoals += campaignTotalGoal;
-      ads.forEach((ad, i) => {
-        const currentAd = ad || {};
-        const isExtraAd = extraAds.includes(ad);
-        const budget = currentAd.budget ?? c.budget;
-        const spent = currentAd.spent ?? (span === 1 ? c.spent : null);
-        const daily = currentAd.dailyAmount ?? c.dailyAmount;
-        const obj = currentAd.objective ?? c.objective;
-        const st = currentAd.status ?? c.status;
-        const adName = currentAd.name ?? '—';
-        const reservas = Number(currentAd.reservas ?? (span === 1 ? c.reservas : 0) ?? 0);
-        const messages = Number(currentAd.messages ?? (span === 1 ? c.messages : 0) ?? 0);
-        const costPerMessage = currentAd.costPerMessage ?? (messages > 0 && spent != null ? spent / messages : null);
-        const costPerReservation = currentAd.costPerReservation ?? (reservas > 0 && spent != null ? spent / reservas : null);
-        const ratio = currentAd.reservationRatio ?? (messages > 0 ? reservas / messages * 100 : null);
-        const adBalance = currentAd.balance ?? (budget != null && spent != null ? budget - spent : null);
-        const observation = currentAd.observation ?? (i === 0 ? c.observation : null);
-        totalReservas += reservas;
-        totalMessages += messages;
-        const rs = span > 1 ? ` rowspan="${span}"` : '';
-        let tr = '<tr>';
-        if (i === 0) {
-          if (isCustomC) {
-            tr += `<td class="type-col"${rs}><input class="inline-edit" type="text" placeholder="Tipo" value="${c.type || ''}" data-field="type" data-cid="${c._id}"></td>`;
-            tr += `<td class="campaign-name"${rs}><input class="inline-edit wide" type="text" placeholder="Nombre campaña" value="${c.name || ''}" data-field="cname" data-cid="${c._id}"></td>`;
-          } else {
-            tr += `<td class="type-col"${rs}>${c.type || '—'}</td>`;
-            tr += `<td class="campaign-name"${rs}>${c.name}</td>`;
-          }
-        }
-        if (isExtraAd || isCustomC) {
-          tr += `<td class="ad-name-col"><input class="inline-edit" type="text" placeholder="Nombre anuncio" value="${currentAd.name || ''}" data-field="adname" data-cname="${c.name || ''}" data-cid="${c._id || ''}" data-aid="${currentAd._id || ''}"></td>`;
-          tr += `<td><input class="inline-edit" type="text" placeholder="Objetivo" value="${obj || ''}" data-field="adobj" data-cname="${c.name || ''}" data-cid="${c._id || ''}" data-aid="${currentAd._id || ''}"></td>`;
-        } else {
-          tr += `<td class="ad-name-col">${currentAd.adUrl ? `<a href="${currentAd.adUrl}" target="_blank" rel="noopener" title="Ver vista previa del anuncio">${adName}</a>` : adName}</td>`;
-          tr += `<td><span class="objective-pill">${obj || '—'}</span></td>`;
-        }
-        tr += `<td class="resultados-col">${reservas}</td>`;
-        if (i === 0) {
-          tr += `<td class="goal-col"${rs}>${renderCampaignGoalInput(c, ads)}${renderTrend(campaignTotalReservas, campaignTotalGoal)}</td>`;
-        }
-        tr += `<td class="num">${fmtCount(messages)}</td>`;
-        tr += `<td class="num">${fmtMoney(costPerMessage)}</td>`;
-        tr += `<td class="num">${fmtMoney(costPerReservation)}</td>`;
-        tr += `<td class="num">${fmtRatio(ratio)}</td>`;
-        tr += `<td><span class="status-pill ${statusClass(st)}">${st || '—'}</span></td>`;
-        tr += `<td class="date-col">${currentAd.startDate || '—'}</td>`;
-        tr += `<td class="date-col deadline-cell">${renderDeadline(currentAd.endDate, currentAd.daysRemaining)}</td>`;
-        tr += `<td class="num">${currentAd.duration != null ? currentAd.duration + ' d' : '—'}</td>`;
-        tr += `<td class="num">${fmtMoney(daily)}</td>`;
-        tr += `<td class="num">${fmtMoney(budget)}</td>`;
-        tr += `<td class="num">${fmtMoney(spent)}</td>`;
-        if (i === 0) tr += `<td class="num campaign-total"${rs}>${fmtMoney(c.budget)}</td>`;
-        if (i === 0) tr += `<td class="num campaign-total"${rs}>${fmtMoney(c.spent)}</td>`;
-        tr += `<td class="num">${fmtMoney(adBalance)}</td>`;
-        if (i === 0) tr += `<td class="num campaign-total"${rs}>${fmtMoney(c.balance)}</td>`;
-        tr += `<td class="num">${fmtMoney(currentAd.newDailyAmount)}</td>`;
-        tr += `<td class="observation-col">${observation || '—'}</td>`;
-        tr += '</tr>';
-        rows.push(tr);
-      });
-      // Separator row with "add ad" button on the dividing line
-      rows.push(`<tr class="campaign-sep"><td colspan="23"><button class="add-ad-btn add-ad-line-btn" data-cname="${c.name}">＋ Agregar anuncio</button></td></tr>`);
-    }
-    rows.push(`<tr class="add-campaign-row"><td colspan="23"><button class="add-campaign-btn">＋ Agregar campaña</button></td></tr>`);
-    rows.push(`<tr class="reservations-total-row"><td></td><td></td><td></td><td class="total-label">Total actualizado ${month.name.toLowerCase()}</td><td class="resultados-col">${totalReservas}</td><td class="goal-col">${totalGoals || ''}</td><td class="num">${totalMessages}</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="num">${fmtMoney(month.adSpendTotal)}</td><td class="num">${fmtMoney(month.budgetTotal)}</td><td class="num">${fmtMoney(month.spend)}</td><td class="num">${fmtMoney(month.balanceTotal)}</td><td></td><td></td><td></td></tr>`);
-    body.innerHTML = rows.join('');
-  }
-  function dateOrderValue(label) {
-    const match = String(label || '').match(/^(\d{1,2})-([A-Za-zÁ-ú]{3})/);
-    if (!match) return null;
-    const index = SHORT_MONTHS.findIndex(name => name.toLowerCase() === match[2].toLowerCase());
-    if (index < 0) return null;
-    return index * 100 + Number(match[1]);
-  }
-  function finishedCampaigns() {
-    return (state.data?.months || []).flatMap(month => (month.campaigns || [])
-      .filter(campaign => isFinishedStatus(campaign.status))
-      .map(campaign => {
-        const ads = campaign.ads || [];
-        const reservas = Number(campaign.reservas ?? ads.reduce((sum, ad) => sum + Number(ad.reservas || 0), 0));
-        const messages = Number(campaign.messages ?? ads.reduce((sum, ad) => sum + Number(ad.messages || 0), 0));
-        const spent = Number(campaign.spent ?? ads.reduce((sum, ad) => sum + Number(ad.spent || 0), 0));
-        const budget = Number(campaign.budget ?? ads.reduce((sum, ad) => sum + Number(ad.budget || 0), 0));
-        const balance = Number(campaign.balance ?? (Number.isFinite(budget) && Number.isFinite(spent) ? budget - spent : 0));
-        const startDates = ads.map(ad => ad.startDate).filter(date => dateOrderValue(date) != null);
-        const endDates = ads.map(ad => ad.endDate).filter(date => dateOrderValue(date) != null);
-        const startDate = startDates.sort((a, b) => dateOrderValue(a) - dateOrderValue(b))[0] || null;
-        const endDate = endDates.sort((a, b) => dateOrderValue(b) - dateOrderValue(a))[0] || null;
-        return { month: month.name, campaign, ads, reservas, messages, spent, budget, balance, startDate, endDate };
-      }));
-  }
-  function renderHistory() {
-    const body = document.getElementById('history-body');
-    if (!body || !state.data) return;
-    const rows = finishedCampaigns();
-    const kpis = document.getElementById('history-kpis');
-    const sub = document.getElementById('history-sub');
-    const totals = rows.reduce((acc, row) => {
-      acc.spend += Number(row.spent || 0);
-      acc.budget += Number(row.budget || 0);
-      acc.reservas += Number(row.reservas || 0);
-      acc.messages += Number(row.messages || 0);
-      return acc;
-    }, { spend: 0, budget: 0, reservas: 0, messages: 0 });
-    if (kpis) {
-      kpis.innerHTML = [
-        ['Campañas', fmtCount(rows.length), 'Finalizadas'],
-        ['Inversión', fmtMoney(totals.spend), 'Gasto acumulado'],
-        ['Reservas', fmtCount(totals.reservas), 'Total historico'],
-        ['Mensajes', fmtCount(totals.messages), 'Conversaciones'],
-        ['Saldo', fmtMoney(totals.budget - totals.spend), 'Presupuesto no usado']
-      ].map(([label, value, meta]) => `<div class="kpi-pill"><span>${label}</span><strong>${value}</strong><small>${meta}</small></div>`).join('');
-    }
-    if (sub) sub.textContent = rows.length ? `${rows.length} campanas finalizadas encontradas en los meses disponibles.` : 'Sin campanas finalizadas registradas.';
-    if (!rows.length) {
-      body.innerHTML = '<tr><td colspan="10" class="table-empty">Sin campanas finalizadas en los meses cargados.</td></tr>';
-      return;
-    }
-    body.innerHTML = rows.map(({ month, campaign, ads, reservas, messages, spent, budget, balance, startDate, endDate }) => `
-      <tr>
-        <td class="date-col">${month}</td>
-        <td class="campaign-name">${campaign.name}</td>
-        <td class="num">${fmtCount(reservas)}</td>
-        <td class="num">${fmtCount(messages)}</td>
-        <td class="num">${fmtMoney(budget)}</td>
-        <td class="num">${fmtMoney(spent)}</td>
-        <td class="num">${fmtMoney(balance)}</td>
-        <td>${ads.length ? ads.map(ad => ad.adUrl ? `<a class="history-ad-link" href="${ad.adUrl}" target="_blank" rel="noopener">${ad.name}</a>` : `<span class="history-ad-muted">${ad.name}</span>`).join('') : '-'}</td>
-        <td class="date-col">${startDate || '-'}</td>
-        <td class="date-col">${endDate || '-'}</td>
-      </tr>
-    `).join('');
-  }
-  function chartOptions(selectedKeys) {
-    const hasMoney = selectedKeys.includes('investment');
-    const hasCount = selectedKeys.some(key => key !== 'investment');
-    const mixed = hasMoney && hasCount;
-    const moneyTicks = value => value === 0 ? 'S/. 0' : `S/. ${(value / 1000).toFixed(1)}k`;
-    const countTicks = value => Number(value).toLocaleString('es-PE');
-    const scales = {
-      x: { grid: { display: false }, border: { color: '#cbd5e1' }, ticks: { color: '#7890b5', font: { size: 10 } } },
-      y: { beginAtZero: true, suggestedMax: hasMoney ? 3500 : undefined, border: { display: false }, grid: { color: 'rgba(148,163,184,.20)' }, ticks: { precision: 0, color: '#7890b5', font: { size: 10 }, callback: value => hasMoney ? moneyTicks(value) : countTicks(value) } }
-    };
-    if (mixed) scales.y1 = { beginAtZero: true, position: 'right', border: { display: false }, grid: { drawOnChartArea: false }, ticks: { precision: 0, color: '#7890b5', font: { size: 10 }, callback: countTicks } };
-    return { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, layout: { padding: { top: 24, right: 12, left: 4 } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: context => ` ${context.dataset.label}: ${formatSeriesValue(context.raw, SERIES[context.dataset.seriesKey] || SERIES.investment)}` } } }, scales };
-  }
-  function applyChartCollapsed() {
-    const panel = document.getElementById('chart-panel');
-    const button = document.getElementById('chart-toggle-btn');
-    if (!panel || !button) return;
-    panel.classList.toggle('is-collapsed', state.chartCollapsed);
-    button.textContent = state.chartCollapsed ? '+' : '-';
-    button.setAttribute('aria-expanded', String(!state.chartCollapsed));
-    button.setAttribute('title', state.chartCollapsed ? 'Expandir grafico' : 'Minimizar grafico');
-  }
-  function renderChart() {
-    const selectedKeys = Object.keys(SERIES).filter(key => state.types.includes(key));
-    document.getElementById('chart-title').textContent = `Evolucion mensual | ${selectedKeys.map(key => SERIES[key].label).join(' + ')} | 2026`;
-    const legend = document.getElementById('chart-legend');
-    if (legend) legend.innerHTML = selectedKeys.map(key => `<span><i class="legend-line ${key}"></i><b>${SERIES[key].label}</b></span>`).join('');
-    document.querySelectorAll('#chart-series-toggles input').forEach(input => {
-      input.checked = selectedKeys.includes(input.value);
-      input.closest('.series-toggle')?.classList.toggle('active', input.checked);
-    });
-    if (state.chartCollapsed) return;
-    const canvas = document.getElementById('chart-monthly');
-    if (!canvas) return;
-    if (typeof Chart === 'undefined') { canvas.parentElement.innerHTML = '<div class="empty-state"><strong>Grafico no disponible sin conexion.</strong><span>Los totales mensuales siguen visibles debajo.</span></div>'; return; }
-    const mixed = selectedKeys.includes('investment') && selectedKeys.some(key => key !== 'investment');
-    const datasets = selectedKeys.map(key => {
-      const series = SERIES[key];
-      return { label: series.label, seriesKey: key, data: MONTHS.map(name => valueFor(name, key)), borderColor: series.color, backgroundColor: series.fill, borderWidth: 2.5, pointRadius: 5, pointHoverRadius: 7, pointBackgroundColor: series.color, pointBorderColor: series.color, tension: .25, fill: selectedKeys.length === 1, spanGaps: false, yAxisID: mixed && key !== 'investment' ? 'y1' : 'y' };
-    });
-    if (state.chart) state.chart.destroy();
-    state.chart = new Chart(canvas, { type: 'line', data: { labels: SHORT_MONTHS, datasets }, options: chartOptions(selectedKeys), plugins: [{ id: 'valueLabels', afterDatasetsDraw(chart) { const ctx = chart.ctx; ctx.save(); ctx.font = '600 10px Inter, sans-serif'; ctx.textAlign = 'center'; chart.data.datasets.forEach((dataset, datasetIndex) => { const meta = chart.getDatasetMeta(datasetIndex); ctx.fillStyle = dataset.borderColor; meta.data.forEach((point, index) => { const value = dataset.data[index]; if (value == null) return; ctx.fillText(formatSeriesValue(value, SERIES[dataset.seriesKey], true), point.x, point.y - 13); }); }); ctx.restore(); } }] });
-  }
-  function renderAll(withTabs = true) {
-    renderKpis();
-    applyChartCollapsed();
-    renderChart();
-    if (withTabs) renderTabs();
-    renderCampaigns();
-    renderHistory();
-    window.dispatchEvent(new CustomEvent('excambiare:data-updated'));
-  }
-  function wireEvents() {
-    document.getElementById('chart-series-toggles').addEventListener('change', event => {
-      const input = event.target.closest('input[type="checkbox"]');
-      if (!input) return;
-      const selected = [...document.querySelectorAll('#chart-series-toggles input:checked')].map(item => item.value);
-      if (!selected.length) { input.checked = true; return; }
-      state.types = Object.keys(SERIES).filter(key => selected.includes(key));
-      saveChartSeries();
-      renderChart();
-    });
-    REFRESH_BUTTON_IDS.forEach(id => {
-      document.getElementById(id)?.addEventListener('click', () => syncLiveSheet({ manual: true }));
-    });
-    document.getElementById('chart-toggle-btn').addEventListener('click', () => {
-      state.chartCollapsed = !state.chartCollapsed;
-      saveChartCollapsed();
-      applyChartCollapsed();
-      if (!state.chartCollapsed) renderChart();
-    });
-    document.getElementById('campaigns-body').addEventListener('change', event => {
-      const input = event.target.closest('.reservation-goal-input');
-      if (input) {
-        if (input.dataset.ad === '__campaign__') {
-          Object.keys(state.goals).forEach(key => { if (key.startsWith(`${input.dataset.campaign}::`)) delete state.goals[key]; });
-        }
-        state.goals[goalKey(input.dataset.campaign, input.dataset.ad)] = input.value;
-        updateAdGoal(input.dataset.campaign, input.dataset.ad, input.value);
-        saveGoals();
-        renderCampaigns();
-        pushGoalToSheet(input);
-        return;
+    const previous = data().previousMonth(month);
+    if (compare && previous?.hasData) {
+      const previousValues = transform(data().metrics.dailyValues(previous, metric.field, metricFilter(metric))).slice(0, month.daysInMonth);
+      if (previousValues.some(value => value)) {
+        series.datasets.push({ label: previous.name, unit: metric.unit, data: previousValues, borderColor: PREVIOUS_COLOR, borderDash: [6, 5], fill: false, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: 0.2 });
+        series.legend.push(`<span><i class="legend-line dashed" style="color:${PREVIOUS_COLOR}"></i><b>${esc(previous.name)} (mismo dia del mes)</b></span>`);
       }
-      const edit = event.target.closest('.inline-edit');
-      if (edit) {
-        const { field, cid, cname, aid } = edit.dataset;
-        setMonthCustom(mc => {
-          if (field === 'type' || field === 'cname') {
-            const camp = mc.campaigns.find(x => x._id === cid);
-            if (camp) {
-              if (field === 'type') camp.type = edit.value;
-              if (field === 'cname') {
-                // also rename extraAds key
-                if (mc.extraAds[camp.name]) { mc.extraAds[edit.value] = mc.extraAds[camp.name]; delete mc.extraAds[camp.name]; }
-                camp.name = edit.value;
-              }
-            }
-          } else if (field === 'adname' || field === 'adobj') {
-            const key = cname || cid;
-            const ads = mc.extraAds[key] || [];
-            const adItem = ads.find(a => a._id === aid);
-            if (adItem) {
-              if (field === 'adname') adItem.name = edit.value;
-              if (field === 'adobj') adItem.objective = edit.value;
-            }
-          }
-          return mc;
-        });
-        renderCampaigns();
-      }
-    });
-    document.getElementById('campaigns-body').addEventListener('click', event => {
-      const addAdBtn = event.target.closest('.add-ad-btn');
-      if (addAdBtn) {
-        const cname = addAdBtn.dataset.cname || '';
-        setMonthCustom(mc => {
-          if (!mc.extraAds[cname]) mc.extraAds[cname] = [];
-          mc.extraAds[cname].push({ _id: genId(), name: '', objective: '' });
-          return mc;
-        });
-        renderCampaigns();
-        return;
-      }
-      const addCampBtn = event.target.closest('.add-campaign-btn');
-      if (addCampBtn) {
-        setMonthCustom(mc => {
-          mc.campaigns.push({ _id: genId(), name: '', type: '', status: 'Activo', ads: [] });
-          return mc;
-        });
-        renderCampaigns();
-      }
-    });
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) syncLiveSheet({ silent: true }); });
+    }
+    return series;
   }
-  async function init() {
-    try {
-      if (window.EXCAMBIARE_ADS_DATA) state.data = window.EXCAMBIARE_ADS_DATA;
-      else { const response = await fetch(DATA_URL, { cache: 'no-store' }); if (!response.ok) throw new Error(`HTTP ${response.status}`); state.data = await response.json(); }
-      const juneData = window.EXCAMBIARE_JUNE_DATA || await fetch(JUNE_DATA_URL, { cache: 'no-store' }).then(response => response.json());
-      mergeSheetMonth(juneData, state.data.source || 'Datos locales');
-      const julyData = window.EXCAMBIARE_JULY_DATA || await fetch(JULY_DATA_URL, { cache: 'no-store' }).then(response => response.json());
-      mergeSheetMonth(julyData, state.data.source || 'Datos locales');
-      const augustData = window.EXCAMBIARE_AUGUST_DATA || await fetch(AUGUST_DATA_URL, { cache: 'no-store' }).then(response => response.json());
-      mergeSheetMonth(augustData, state.data.source || 'Datos locales');
-      const septemberData = window.EXCAMBIARE_SEPTEMBER_DATA || await fetch(SEPTEMBER_DATA_URL, { cache: 'no-store' }).then(response => response.json());
-      mergeSheetMonth(septemberData, state.data.source || 'Datos locales');
-      wireEvents();
-      renderAll();
-      syncLiveSheet({ silent: true });
-      state.syncTimer = setInterval(() => syncLiveSheet({ silent: true }), SYNC_INTERVAL_MS);
-    } catch (error) { document.getElementById('view-obj').innerHTML = '<div class="data-notice error"><strong>No se pudo cargar la informacion de Inversiones Excambiare.</strong></div>'; console.error(error); }
-  }
-  // Snapshot de solo lectura para los modulos que dependen de estos datos (Proyecciones).
-  function snapshot() {
-    if (!state.data) return null;
+
+  // Un indicador: su linea contra el mes anterior. Varios: una linea por indicador, sin comparacion, cada una en su
+  // propio panel (eje y) para ver como se mueve el resultado frente a la inversion sin mezclar escalas.
+  function campaignSeries(metrics, modeKey, month) {
+    if (metrics.length === 1) return lineSeries(metrics[0], modeKey, month);
+    const parts = metrics.map(metric => lineSeries(metric, modeKey, month, false));
+    const color = metrics[0].color;
+    const what = modeKey === 'monthly' ? `${metrics.length} indicadores por mes` : `${esc(month.name)} ${month.year}`;
+    const previous = modeKey === 'monthly' ? null : data().previousMonth(month);
     return {
-      cutoff: state.data.cutoff,
-      source: state.data.source,
-      year: state.data.year,
-      lastSync: state.lastSync,
-      months: cloneData(state.data).months,
+      labels: parts[0].labels,
+      datasets: parts.map((part, index) => ({ ...part.datasets[0], label: metrics[index].label, yAxisID: `y${index}` })),
+      legend: [
+        `<span><i class="legend-line" style="background:${color}"></i><b>${what}</b></span>`,
+        `<span>Cada indicador con su escala.${previous?.hasData ? ` Elige uno solo para compararlo con ${esc(previous.name)}.` : ''}</span>`,
+      ],
     };
   }
-  window.ExcambiareObjectives = { renderHistory, snapshot };
+
+  function destroyChart(id) {
+    state.charts.get(id)?.destroy();
+    state.charts.delete(id);
+  }
+
+  const formatValue = (unit, value) => (unit === 'money' ? fmt('money', value) : fmt('count', value));
+  const tickValue = (unit, value) => (unit === 'money'
+    ? (value === 0 ? `${data().CURRENCY} 0` : `${data().CURRENCY} ${Number(value).toLocaleString('es-PE', { maximumFractionDigits: 0 })}`)
+    : Number(value).toLocaleString('es-PE', { notation: Math.abs(value) >= 100000 ? 'compact' : 'standard', maximumFractionDigits: 1 }));
+
+  // Con un indicador hay un solo eje y; con varios, un eje por indicador apilado en vertical (paneles con su
+  // escala) sobre el mismo eje de dias. Nunca dos escalas superpuestas: los cruces entre lineas no significarian nada.
+  function yScales(metrics) {
+    const base = unit => ({ beginAtZero: true, border: { display: false }, ticks: { color: '#7890b5', font: { size: 10 }, callback: value => tickValue(unit, value) } });
+    if (metrics.length === 1) return { y: { ...base(metrics[0].unit), grid: { color: 'rgba(148,163,184,.20)' } } };
+    // Chart.js apila de abajo hacia arriba en el orden de los ejes: se dan al reves para que el resultado quede arriba.
+    return Object.fromEntries(metrics.map((metric, index) => [`y${index}`, {
+      ...base(metric.unit),
+      stack: 'metrics',
+      stackWeight: 1,
+      grace: '25%',
+      // El tope de cada panel cae sobre el cero del panel de arriba: se omite para que no se encimen.
+      ticks: { ...base(metric.unit).ticks, maxTicksLimit: 5, callback: (value, tickIndex, ticks) => (index > 0 && tickIndex === ticks.length - 1 ? '' : tickValue(metric.unit, value)) },
+      // La linea del cero marca el piso de cada panel.
+      grid: { color: context => (context.tick?.value === 0 ? '#cbd5e1' : 'rgba(148,163,184,.20)') },
+      panelLabel: metric.label,
+    }]).reverse());
+  }
+
+  function drawLineChart(id, canvas, series, metrics, modeKey) {
+    destroyChart(id);
+    if (!canvas) return;
+    if (typeof Chart === 'undefined') {
+      canvas.parentElement.innerHTML = '<div class="empty-state"><strong>Grafico no disponible sin conexion.</strong><span>Los indicadores y las tablas siguen visibles.</span></div>';
+      return;
+    }
+    state.charts.set(id, new Chart(canvas, {
+      type: 'line',
+      data: { labels: series.labels, datasets: series.datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: { mode: 'index', intersect: false },
+        layout: { padding: { top: 24, right: 12, left: 4 } },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            filter: item => item.raw != null,
+            callbacks: {
+              title: items => (modeKey === 'monthly' ? data().MONTHS[items[0].dataIndex] : `Dia ${items[0].label}`),
+              label: context => ` ${context.dataset.label}: ${formatValue(context.dataset.unit, context.raw)}`,
+            },
+          },
+        },
+        scales: {
+          x: { grid: { display: false }, border: { color: '#cbd5e1' }, ticks: { color: '#7890b5', font: { size: 10 }, autoSkip: true, maxTicksLimit: modeKey === 'monthly' ? 12 : 16 } },
+          ...yScales(metrics),
+        },
+      },
+      plugins: [{
+        id: 'valueLabels',
+        afterDatasetsDraw(chart) {
+          const ctx = chart.ctx;
+          ctx.save();
+          ctx.font = '600 10px Inter, sans-serif';
+          ctx.textAlign = 'center';
+          chart.data.datasets.forEach((dataset, index) => {
+            if (!dataset.valueLabels) return;
+            ctx.fillStyle = dataset.borderColor;
+            chart.getDatasetMeta(index).data.forEach((point, pointIndex) => {
+              const value = dataset.data[pointIndex];
+              if (value == null) return;
+              const text = dataset.unit === 'money' ? tickValue('money', Math.round(value)) : Number(value).toLocaleString('es-PE', { notation: value >= 10000 ? 'compact' : 'standard', maximumFractionDigits: 1 });
+              ctx.fillText(text, point.x, point.y - 12);
+            });
+          });
+          ctx.restore();
+        },
+      }, {
+        // Nombre de cada panel arriba a la izquierda, en horizontal (solo con varios indicadores).
+        id: 'panelLabels',
+        afterDatasetsDraw(chart) {
+          const ctx = chart.ctx;
+          ctx.save();
+          ctx.font = '600 11px Inter, sans-serif';
+          ctx.textBaseline = 'top';
+          Object.values(chart.scales).forEach(scale => {
+            const label = scale.options.panelLabel;
+            if (!label) return;
+            const x = chart.chartArea.left + 8;
+            const y = scale.top + 4;
+            ctx.fillStyle = 'rgba(255,255,255,.85)';
+            ctx.fillRect(x - 4, y - 2, ctx.measureText(label).width + 8, 16);
+            ctx.fillStyle = '#475569';
+            ctx.fillText(label, x, y);
+          });
+          ctx.restore();
+        },
+      }, {
+        // Linea vertical en el dia del tooltip, a lo alto de todos los paneles.
+        id: 'crosshair',
+        afterDatasetsDraw(chart) {
+          const active = chart.tooltip?.getActiveElements() || [];
+          if (!active.length) return;
+          const x = active[0].element.x;
+          const ctx = chart.ctx;
+          ctx.save();
+          ctx.strokeStyle = '#94a3b8';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          ctx.moveTo(x, chart.chartArea.top);
+          ctx.lineTo(x, chart.chartArea.bottom);
+          ctx.stroke();
+          ctx.restore();
+        },
+      }],
+    }));
+  }
+
+  // Chips de un grafico: radio para la vista, casillas para los indicadores (selected es entonces una lista).
+  function chipsHtml(items, selected, name, color, multiple = false) {
+    return items.map(item => {
+      const on = multiple ? selected.includes(item.key) : item.key === selected;
+      return `
+      <label class="series-toggle campaign-chip${on ? ' active' : ''}" style="--campaign-color:${color || item.color}">
+        <input type="${multiple ? 'checkbox' : 'radio'}" name="${esc(name)}" value="${esc(item.key)}"${on ? ' checked' : ''}>${esc(item.label)}
+      </label>`;
+    }).join('');
+  }
+
+  // La vista anual solo tiene sentido por mes; el modo elegido se conserva para cuando se vuelva a un mes.
+  function chartModes(savedMode, annual) {
+    if (annual) return { modes: MODES.filter(item => item.key === 'monthly'), modeKey: 'monthly' };
+    return { modes: MODES, modeKey: MODES.some(item => item.key === savedMode) ? savedMode : 'cumulative' };
+  }
+
+  function setToggle(button, collapsed, what) {
+    if (!button) return;
+    button.setAttribute('aria-expanded', String(!collapsed));
+    button.setAttribute('title', collapsed ? `Expandir ${what}` : `Minimizar ${what}`);
+  }
+
+  // ── Cuadro de cada campana ───────────────────────────────────────────────
+  // Cada objetivo (la "campana" del reporte) tiene su cuadro: KPIs contra el mes anterior, su grafico y sus
+  // conjuntos de anuncios. Indicadores, vista y minimizado se recuerdan por objetivo.
+  function campaignSettings(key) {
+    const saved = state.campaignCharts[key] || {};
+    const metrics = CAMPAIGN_METRICS.map(item => item.key).filter(metricKey => Array.isArray(saved.metrics) && saved.metrics.includes(metricKey));
+    return {
+      metrics: metrics.length ? metrics : DEFAULT_CAMPAIGN_METRICS,
+      mode: MODES.some(item => item.key === saved.mode) ? saved.mode : 'cumulative',
+      collapsed: saved.collapsed === true,
+    };
+  }
+
+  function saveCampaignSettings(key, changes) {
+    state.campaignCharts[key] = { ...campaignSettings(key), ...changes };
+    saveSetting(CAMPAIGN_CHARTS_KEY, JSON.stringify(state.campaignCharts));
+  }
+
+  function campaignBlock(key) {
+    return [...document.querySelectorAll('#campaign-blocks .campaign-block')].find(node => node.dataset.objective === key) || null;
+  }
+
+  // Conjuntos de anuncios del objetivo en el periodo, con sus resultados contra el mes anterior.
+  function adSetsHtml(period, objective) {
+    const ofObjective = rows => rows.filter(row => row.group === objective.key);
+    const sets = data().metrics.adSets(ofObjective(period.rows));
+    const previous = new Map((period.compare ? data().metrics.adSets(ofObjective(period.compare.rows)) : []).map(set => [set.key, set]));
+    const compare = Boolean(period.compare);
+    // Con una sola campana su nombre ya esta en el subtitulo del cuadro.
+    const manyCampaigns = objective.campaigns.length > 1;
+    // [titulo, numerica]
+    const head = [['Conjunto']].concat(manyCampaigns ? [['Campaña']] : [], [['Resultados', true]])
+      .concat(compare ? [[`Resultados ${period.compare.label}`, true], ['Variacion', true]] : [])
+      .concat([['Costo por resultado', true], ['Inversion', true], ['% de la campaña'], ['Impresiones', true], ['Alcance', true], ['CPM', true], ['Clics', true]]);
+    const body = sets.map(set => {
+      const before = previous.get(set.key);
+      return `
+        <tr>
+          <td class="campaign-name">${esc(set.name || '(sin conjunto)')}<small>${set.adCount} ${set.adCount === 1 ? 'anuncio' : 'anuncios'}</small></td>
+          ${manyCampaigns ? `<td class="campaign-set-col">${esc(set.campaigns.join(' / '))}</td>` : ''}
+          <td class="num"><b>${fmt('count', set.results)}</b></td>
+          ${compare ? `<td class="num">${before ? fmt('count', before.results) : '<span class="no-data">-</span>'}</td><td class="num">${variationCell(set.results, before?.results)}</td>` : ''}
+          <td class="num">${fmt('unitCost', set.costPerResult)}</td>
+          <td class="num">${fmt('money', set.spend)}</td>
+          <td class="share-col"><div class="share-bar"><span style="width:${Math.min(100, set.share).toFixed(1)}%"></span></div><b class="share-value">${fmt('pct', set.share)}</b></td>
+          <td class="num">${fmt('count', set.impressions)}</td>
+          <td class="num">${fmt('count', set.reach)}</td>
+          <td class="num">${fmt('money', set.cpm)}</td>
+          <td class="num">${fmt('count', set.clicks)}</td>
+        </tr>`;
+    }).join('') || `<tr><td class="table-empty" colspan="${head.length}">Sin conjuntos con gasto en el periodo.</td></tr>`;
+    return `
+      <div class="adset-head">
+        <div class="panel-title">Conjuntos de anuncios</div>
+        <div class="panel-sub">${sets.length} ${sets.length === 1 ? 'conjunto' : 'conjuntos'} con gasto o impresiones en ${esc(period.label)}${compare ? `. Resultados contra ${esc(period.compare.label)}` : ''}.</div>
+      </div>
+      <div class="table-scroll">
+        <table class="data-table adset-table">
+          <thead><tr>${head.map(([label, numeric]) => `<th${numeric ? ' class="num"' : ''}>${esc(label)}</th>`).join('')}</tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>`;
+  }
+
+  // Anuncios del objetivo en el periodo, de mas a menos resultados, con la estrella en el lider.
+  function campaignAdsHtml(period, objective) {
+    const ofObjective = rows => rows.filter(row => row.group === objective.key);
+    const ads = data().metrics.ads(ofObjective(period.rows)).sort((a, b) => (b.results - a.results) || (b.spend - a.spend));
+    const previous = new Map((period.compare ? data().metrics.ads(ofObjective(period.compare.rows)) : []).map(ad => [ad.key, ad]));
+    const compare = Boolean(period.compare);
+    // Con un solo conjunto su nombre no aporta: la columna aparece cuando hay mas de uno.
+    const manySets = new Set(ads.flatMap(ad => ad.adSets)).size > 1;
+    // [titulo, numerica]
+    const head = [['Anuncio']].concat(manySets ? [['Conjunto']] : [], [['Resultados', true]])
+      .concat(compare ? [[`Resultados ${period.compare.label}`, true], ['Variacion', true]] : [])
+      .concat([['Costo por resultado', true], ['Inversion', true], ['% de la campaña'], ['Impresiones', true], ['Alcance', true], ['CPM', true], ['Clics', true], ['Dias activos']]);
+    const body = ads.map((ad, index) => {
+      const before = previous.get(ad.key);
+      const share = objective.spend > 0 ? (ad.spend / objective.spend) * 100 : 0;
+      return `
+        <tr>
+          <td class="campaign-name campaign-ad-name" title="${esc(ad.ad)}">${index === 0 && ad.results > 0 ? '<b class="leader-star" title="Lider de la campaña">&#9733;</b> ' : ''}${adNameLink(ad)}</td>
+          ${manySets ? `<td class="campaign-set-col">${esc(ad.adSets.join(' / ') || '-')}</td>` : ''}
+          <td class="num"><b>${fmt('count', ad.results)}</b></td>
+          ${compare ? `<td class="num">${before ? fmt('count', before.results) : '<span class="no-data">-</span>'}</td><td class="num">${variationCell(ad.results, before?.results)}</td>` : ''}
+          <td class="num">${fmt('unitCost', ad.costPerResult)}</td>
+          <td class="num">${fmt('money', ad.spend)}</td>
+          <td class="share-col"><div class="share-bar"><span style="width:${Math.min(100, share).toFixed(1)}%"></span></div><b class="share-value">${fmt('pct', share)}</b></td>
+          <td class="num">${fmt('count', ad.impressions)}</td>
+          <td class="num">${fmt('count', ad.reach)}</td>
+          <td class="num">${fmt('money', ad.cpm)}</td>
+          <td class="num">${fmt('count', ad.clicks)}</td>
+          <td class="date-col">${adDays(ad, period)}</td>
+        </tr>`;
+    }).join('') || `<tr><td class="table-empty" colspan="${head.length}">Sin anuncios con gasto en el periodo.</td></tr>`;
+    return `
+      <div class="adset-head">
+        <div class="panel-title">Anuncios</div>
+        <div class="panel-sub">${ads.length} ${ads.length === 1 ? 'anuncio' : 'anuncios'} con gasto o impresiones en ${esc(period.label)}${compare ? `. Resultados contra ${esc(period.compare.label)}` : ''}. La estrella marca al lider.</div>
+      </div>
+      <div class="table-scroll">
+        <table class="data-table adset-table campaign-ads-table">
+          <thead><tr>${head.map(([label, numeric]) => `<th${numeric ? ' class="num"' : ''}>${esc(label)}</th>`).join('')}</tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>`;
+  }
+
+  function campaignHtml(period, objective, before) {
+    const key = esc(objective.key);
+    const settings = campaignSettings(objective.key);
+    let comparison = '';
+    if (period.annual) comparison = `. ${objectiveMonths(period, objective.key)}`;
+    else if (period.compare) comparison = before ? ` vs ${period.compare.label}` : `. Nueva: no corria en ${period.compare.label}`;
+    const kpis = CAMPAIGN_KPIS.map(kpi => `
+      <div><dt>${esc(kpi.label || objective.resultLabel)}</dt><dd>${fmt(kpi.format, objective[kpi.key])}${before ? deltaHtml(objective[kpi.key], before[kpi.key], kpi.better) : ''}</dd></div>`).join('');
+    return `
+      <section class="campaign-block${settings.collapsed ? ' is-collapsed' : ''}" id="campaign-${key}" data-objective="${key}" style="--campaign-color:${objective.color}">
+        <div class="panel-head chart-panel-head">
+          <div>
+            <div class="campaign-block-title"><i class="campaign-dot"></i>Campaña ${esc(objective.label)}<em>${fmt('pct', objective.share)} de la inversion</em></div>
+            <div class="panel-sub">${esc(objective.campaigns.join(' / '))} | ${esc(period.label)}${esc(comparison)}</div>
+          </div>
+          <div class="chart-controls">
+            <div class="chart-series-toggles" data-campaign-modes role="radiogroup" aria-label="Vista del grafico de ${esc(objective.label)}"></div>
+            <button type="button" class="chart-toggle" data-campaign-toggle="${key}" aria-controls="campaign-body-${key}">${CHEVRON}</button>
+          </div>
+        </div>
+        <dl class="chart-kpis">${kpis}</dl>
+        <div class="campaign-block-body" id="campaign-body-${key}">
+          <div class="chart-series-toggles chart-metrics" data-campaign-metrics role="group" aria-label="Indicadores del grafico de ${esc(objective.label)}"></div>
+          <div class="chart-wrap h-300"><canvas role="img" aria-label="Grafico de la campaña ${esc(objective.label)}"></canvas></div>
+          <div class="chart-legend projection-legend" data-campaign-legend></div>
+          ${adSetsHtml(period, objective)}
+          ${campaignAdsHtml(period, objective)}
+        </div>
+      </section>`;
+  }
+
+  // Los controles del cuadro lo redibujan solo con la clave; renderCampaigns le pasa el periodo y sus objetivos.
+  function renderCampaignChart(key, period = currentPeriod(), objectives = period ? data().metrics.objectives(period.rows) : []) {
+    const block = campaignBlock(key);
+    const objective = objectives.find(item => item.key === key);
+    const month = selectedMonth();
+    if (!block || !objective || !month) return;
+    const settings = campaignSettings(key);
+    const { modes, modeKey } = chartModes(settings.mode, period.annual);
+    const metrics = CAMPAIGN_METRICS.map(item => ({ ...item, label: item.key === 'results' ? objective.resultLabel : item.label, color: objective.color, group: key }));
+    const selected = metrics.filter(item => settings.metrics.includes(item.key));
+    block.classList.toggle('is-collapsed', settings.collapsed);
+    setToggle(block.querySelector('[data-campaign-toggle]'), settings.collapsed, `la campaña ${objective.label}`);
+    replaceHtml(block.querySelector('[data-campaign-modes]'), chipsHtml(modes, modeKey, `campaign-mode-${key}`, 'var(--brand-text)'));
+    replaceHtml(block.querySelector('[data-campaign-metrics]'), chipsHtml(metrics, settings.metrics, `campaign-metric-${key}`, null, true));
+    if (settings.collapsed) {
+      destroyChart(key);
+      return;
+    }
+    const series = campaignSeries(selected, modeKey, month);
+    const canvas = block.querySelector('canvas');
+    // Cada panel extra suma alto para que ninguno quede aplastado. Sin Chart.js el canvas ya es el aviso.
+    if (canvas) canvas.parentElement.style.height = selected.length > 1 ? `${90 + 135 * selected.length}px` : '';
+    block.querySelector('[data-campaign-legend]').innerHTML = series.legend.join('');
+    drawLineChart(key, canvas, series, selected, modeKey);
+  }
+
+  function renderCampaigns(period, objectives) {
+    const host = document.getElementById('campaign-blocks');
+    if (!host) return;
+    [...state.charts.keys()].forEach(destroyChart);
+    if (!period) {
+      host.innerHTML = '';
+      return;
+    }
+    const previous = period.compare ? data().metrics.objectives(period.compare.rows) : [];
+    // Datos nuevos rehacen los cuadros sin sacar el foco del chip o del boton que se estaba usando.
+    data().keepFocus(host, () => {
+      host.innerHTML = objectives.map(objective => campaignHtml(period, objective, previous.find(item => item.key === objective.key))).join('');
+      objectives.forEach(objective => renderCampaignChart(objective.key, period, objectives));
+    });
+  }
+
+  // ── Distribucion por campana ─────────────────────────────────────────────
+  function renderDistribution(period, objectives) {
+    const body = document.getElementById('distribution-body');
+    const sub = document.getElementById('distribution-sub');
+    if (!body) return;
+    if (!period) {
+      body.innerHTML = '<tr><td class="table-empty" colspan="13">Sin datos para el periodo.</td></tr>';
+      if (sub) sub.textContent = '';
+      return;
+    }
+    const rows = data().metrics.campaigns(period.rows);
+    const colors = new Map(objectives.map(objective => [objective.key, objective.color]));
+    const total = data().metrics.summarize(period.rows);
+    if (sub) sub.textContent = `${period.label} | ${rows.length} ${rows.length === 1 ? 'campaña' : 'campañas'} con gasto o impresiones.`;
+    body.innerHTML = rows.map(row => `
+      <tr>
+        <td class="campaign-name">${esc(row.name)}</td>
+        <td><span class="objective-label" style="--campaign-color:${colors.get(row.group) || PREVIOUS_COLOR}"><i class="campaign-dot"></i>${esc(row.groupLabel)}</span></td>
+        <td><span class="objective-pill">${esc(row.resultLabel)}</span></td>
+        <td class="num">${fmt('count', row.results)}</td>
+        <td class="num">${fmt('unitCost', row.costPerResult)}</td>
+        <td class="num">${fmt('money', row.spend)}</td>
+        <td class="share-col"><div class="share-bar" style="--campaign-color:${colors.get(row.group) || PREVIOUS_COLOR}"><span style="width:${Math.min(100, row.share).toFixed(1)}%"></span></div><b class="share-value">${fmt('pct', row.share)}</b></td>
+        <td class="num">${fmt('count', row.impressions)}</td>
+        <td class="num">${fmt('count', row.reach)}</td>
+        <td class="num">${fmt('decimal', row.frequency)}</td>
+        <td class="num">${fmt('money', row.cpm)}</td>
+        <td class="num">${fmt('count', row.clicks)}</td>
+        <td class="num">${fmt('pct', row.ctr, 2)}</td>
+      </tr>`).join('') + `
+      <tr class="total-row">
+        <td class="campaign-name">Total del periodo</td>
+        <td></td>
+        <td><span class="no-data">Los resultados no se suman entre objetivos</span></td>
+        <td></td><td></td>
+        <td class="num">${fmt('money', total.spend)}</td>
+        <td><b class="share-value">100%</b></td>
+        <td class="num">${fmt('count', total.impressions)}</td>
+        <td class="num">${fmt('count', total.reach)}</td>
+        <td class="num">${fmt('decimal', total.frequency)}</td>
+        <td class="num">${fmt('money', total.cpm)}</td>
+        <td class="num">${fmt('count', total.clicks)}</td>
+        <td class="num">${fmt('pct', total.ctr, 2)}</td>
+      </tr>`;
+  }
+
+  // ── Modulo Anuncios (vista view-ads) ─────────────────────────────────────
+  // Mejor anuncio de cada objetivo: el de mas resultados y, a igual cantidad, el de menor costo por resultado. Va uno
+  // por objetivo porque cada uno mide un resultado distinto (interacciones, ThruPlays, visitas al perfil).
+  function renderTopAds(period, objectives) {
+    const host = document.getElementById('ads-top');
+    if (!host) return;
+    if (!period) {
+      host.innerHTML = '';
+      return;
+    }
+    const colors = new Map(objectives.map(objective => [objective.key, objective.color]));
+    const ads = data().metrics.ads(period.rows).filter(ad => ad.results > 0);
+    const top = objectives
+      .map(objective => ads
+        .filter(ad => ad.group === objective.key)
+        .sort((a, b) => (b.results - a.results) || ((a.costPerResult ?? Infinity) - (b.costPerResult ?? Infinity)))[0])
+      .filter(Boolean);
+    const head = '<div class="ad-top-head">Mejor anuncio de cada objetivo</div>';
+    if (!top.length) {
+      host.innerHTML = `${head}<p class="ad-top-note">Ningun anuncio registro resultados en el periodo.</p>`;
+      return;
+    }
+    host.innerHTML = `${head}<div class="ad-top-list">${top.map((ad, index) => `
+      <div class="ad-top-card" style="--campaign-color:${colors.get(ad.group) || PREVIOUS_COLOR}">
+        <span class="ad-top-rank">${index + 1}</span>
+        <div class="ad-top-body">
+          <div class="ad-top-name" title="${esc(ad.ad)}">${adNameLink(ad)}</div>
+          <div class="ad-top-group"><i class="campaign-dot"></i>${esc(ad.groupLabel)} · ${esc(ad.campaigns.join(' / '))}</div>
+          <div class="ad-top-value">${fmt('count', ad.results)}<small>${esc(ad.resultLabel)}</small></div>
+          <div class="ad-top-meta">${fmt('unitCost', ad.costPerResult)} por resultado · ${fmt('money', ad.spend)} de inversion</div>
+        </div>
+      </div>`).join('')}</div>`;
+  }
+
+  function renderAdsFilter(objectives) {
+    const select = document.getElementById('ads-objective');
+    if (!select) return;
+    if (state.adsObjective !== 'all' && !objectives.some(objective => objective.key === state.adsObjective)) state.adsObjective = 'all';
+    select.innerHTML = ['<option value="all">Todos los objetivos</option>']
+      .concat(objectives.map(objective => `<option value="${esc(objective.key)}"${objective.key === state.adsObjective ? ' selected' : ''}>${esc(objective.label)}</option>`))
+      .join('');
+  }
+
+  function renderAds(period, objectives = period ? data().metrics.objectives(period.rows) : []) {
+    const body = document.getElementById('campaigns-body');
+    const title = document.getElementById('campaigns-title');
+    const sub = document.getElementById('campaigns-sub');
+    const prevHead = document.getElementById('ads-prev-head');
+    if (!body) return;
+    // Sin periodo de comparacion (vista anual o primer mes) las columnas de mes anterior y variacion se ocultan.
+    document.querySelector('.campaigns-panel')?.classList.toggle('no-compare', !period?.compare);
+    if (!period) {
+      body.innerHTML = '<tr><td class="table-empty" colspan="14">Sin datos para el periodo.</td></tr>';
+      // Vuelven los textos iniciales: los del periodo anterior ya no aplican.
+      if (title) title.textContent = 'Anuncios del periodo';
+      if (sub) sub.textContent = '';
+      if (prevHead) prevHead.textContent = 'Mes anterior';
+      renderAdsFilter([]);
+      return;
+    }
+    renderAdsFilter(objectives);
+    const order = new Map(objectives.map((objective, index) => [objective.key, index]));
+    const colors = new Map(objectives.map(objective => [objective.key, objective.color]));
+    const previous = new Map((period.compare ? data().metrics.ads(period.compare.rows) : []).map(ad => [ad.key, ad]));
+    const all = data().metrics.ads(period.rows)
+      .sort((a, b) => (order.get(a.group) - order.get(b.group)) || (b.results - a.results) || (b.spend - a.spend));
+    const leaders = new Set();
+    all.forEach(ad => { if (ad.results > 0 && !leaders.has(ad.group)) { leaders.add(ad.group); ad.leader = true; } });
+    const rows = state.adsObjective === 'all' ? all : all.filter(ad => ad.group === state.adsObjective);
+
+    if (title) title.textContent = `Anuncios | ${period.label} ${period.year}`;
+    if (sub) sub.textContent = `${rows.length} ${rows.length === 1 ? 'anuncio' : 'anuncios'} ordenados por resultados dentro de cada objetivo. La estrella marca al lider de cada objetivo.`;
+    if (prevHead) prevHead.textContent = period.compare ? `Resultados ${period.compare.label}` : 'Mes anterior';
+
+    if (!rows.length) {
+      body.innerHTML = '<tr><td class="table-empty" colspan="14">No hay anuncios para este objetivo en el periodo.</td></tr>';
+      return;
+    }
+    body.innerHTML = rows.map(ad => {
+      const before = previous.get(ad.key);
+      const changeCell = period.compare ? variationCell(ad.results, before?.results) : '<span class="no-data">-</span>';
+      return `
+        <tr>
+          <td class="type-col"><span class="objective-label" style="--campaign-color:${colors.get(ad.group) || PREVIOUS_COLOR}"><i class="campaign-dot"></i>${esc(ad.groupLabel)}</span></td>
+          <td class="ad-name-col" title="${esc(ad.ad)}"><span class="ad-name-text">${ad.leader ? '<b class="leader-star" title="Lider del objetivo">&#9733;</b> ' : ''}${adNameLink(ad)}</span></td>
+          <td class="campaign-set-col">${esc(ad.campaigns.join(' / '))}<small>${esc(ad.adSets.join(' / ') || '-')}</small></td>
+          <td><span class="objective-pill">${esc(ad.resultLabel)}</span></td>
+          <td class="num"><b>${fmt('count', ad.results)}</b></td>
+          <td class="num">${before ? fmt('count', before.results) : '<span class="no-data">-</span>'}</td>
+          <td class="num">${changeCell}</td>
+          <td class="num">${fmt('unitCost', ad.costPerResult)}</td>
+          <td class="num">${fmt('money', ad.spend)}</td>
+          <td class="num">${fmt('count', ad.impressions)}</td>
+          <td class="num">${fmt('count', ad.reach)}</td>
+          <td class="num">${fmt('money', ad.cpm)}</td>
+          <td class="num">${fmt('count', ad.clicks)}</td>
+          <td class="date-col">${adDays(ad, period)}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  // ── Historico de campanas ────────────────────────────────────────────────
+  function campaignHistory(snapshot) {
+    const byName = new Map();
+    snapshot.months.forEach(month => {
+      month.rows.forEach(row => {
+        if (!byName.has(row.campaign)) byName.set(row.campaign, { rows: [], months: new Set(), first: null, last: null });
+        const entry = byName.get(row.campaign);
+        entry.rows.push(row);
+        if (hasActivity(row)) {
+          const date = `${month.key}-${String(row.d).padStart(2, '0')}`;
+          entry.months.add(month.key);
+          if (!entry.first || date < entry.first) entry.first = date;
+          if (!entry.last || date > entry.last) entry.last = date;
+        }
+      });
+    });
+    const objectives = new Map(data().metrics.objectives(snapshot.months.flatMap(month => month.rows)).map(objective => [objective.key, objective]));
+    return [...byName.entries()]
+      .filter(([, entry]) => entry.last)
+      .map(([name, entry]) => {
+        const campaign = data().metrics.campaigns(entry.rows)[0];
+        const adList = data().metrics.ads(entry.rows).sort((a, b) => b.results - a.results);
+        return {
+          ...campaign,
+          name,
+          color: objectives.get(campaign.group)?.color || PREVIOUS_COLOR,
+          rows: entry.rows,
+          ads: adList,
+          first: entry.first,
+          last: entry.last,
+          months: [...entry.months].sort(),
+          finished: Boolean(snapshot.dataEnd && entry.last < snapshot.dataEnd),
+        };
+      })
+      .sort((a, b) => b.last.localeCompare(a.last) || b.spend - a.spend);
+  }
+
+  function shortDate(iso, withYear = true) {
+    const [year, month, day] = String(iso || '').split('-').map(Number);
+    if (!year || !month || !day) return '-';
+    return `${day} ${data().SHORT_MONTHS[month - 1]}${withYear ? ` ${year}` : ''}`;
+  }
+
+  function periodLabel(first, last) {
+    if (first === last) return shortDate(first);
+    return `${shortDate(first, first.slice(0, 4) !== last.slice(0, 4))} - ${shortDate(last)}`;
+  }
+
+  // Mes elegido en las pestanas del Historico; null es "Todos" (o un mes que ya no tiene datos).
+  function historyMonth() {
+    if (state.historyMonth === HISTORY_ALL) return null;
+    const month = data().monthByKey(state.historyMonth);
+    return month?.hasData ? month : null;
+  }
+
+  function renderHistoryTabs(snapshot, year, month) {
+    const host = document.getElementById('history-month-tabs');
+    if (!host) return;
+    replaceHtml(host, monthTabsHtml(snapshot, year, month?.key, {
+      key: HISTORY_ALL,
+      label: 'Todos',
+      title: 'Todas las descargas de Meta en Drive',
+      available: snapshot.months.some(item => item.hasData),
+      selected: !month,
+    }));
+  }
+
+  const matchesStatus = (item, key) => key === 'todas' || (key === 'activas' ? !item.finished : item.finished);
+
+  // Una fila por campana con las cifras del alcance elegido: todas las descargas o solo el archivo de un mes
+  // (las campanas que corrieron ese mes, con sus dias activos y su gasto de ese mes).
+  function historyEntries(all, month) {
+    if (!month) return all.map(item => ({ item, stats: item, rows: item.rows, ads: item.ads }));
+    return all
+      .filter(item => item.months.includes(month.key))
+      .map(item => {
+        const rows = item.rows.filter(row => row.day.startsWith(month.key));
+        const days = rows.filter(hasActivity).map(row => row.d);
+        return {
+          item,
+          stats: data().metrics.campaigns(rows)[0],
+          rows,
+          ads: data().metrics.ads(rows).sort((a, b) => b.results - a.results),
+          from: Math.min(...days),
+          to: Math.max(...days),
+        };
+      })
+      .sort((a, b) => b.stats.spend - a.stats.spend);
+  }
+
+  // Todas / Activas / Finalizadas, con cuantas campanas hay de cada una en el mes elegido.
+  function renderHistoryStatus(entries) {
+    const host = document.getElementById('history-status-filter');
+    if (!host) return;
+    replaceHtml(host, HISTORY_STATUS.map(status => {
+      const selected = status.key === state.historyStatus;
+      const count = entries.filter(entry => matchesStatus(entry.item, status.key)).length;
+      return `<label class="series-toggle campaign-chip${selected ? ' active' : ''}"><input type="radio" name="history-status" value="${status.key}"${selected ? ' checked' : ''}>${status.label} (${count})</label>`;
+    }).join(''));
+  }
+
+  function renderHistoryKpis(snapshot, entries, month) {
+    const host = document.getElementById('history-kpis');
+    if (!host) return;
+    const totals = data().metrics.summarize(entries.flatMap(entry => entry.rows));
+    const active = entries.filter(entry => !entry.item.finished).length;
+    const finished = entries.length - active;
+    const statusNote = {
+      todas: `${active} ${active === 1 ? 'activa' : 'activas'} y ${finished} ${finished === 1 ? 'finalizada' : 'finalizadas'}`,
+      activas: `Con gasto al ${shortDate(snapshot.dataEnd)}`,
+      finalizadas: `Sin gasto al ${shortDate(snapshot.dataEnd)}`,
+    }[state.historyStatus];
+    host.innerHTML = [
+      ['Campañas', fmt('count', entries.length), statusNote],
+      ['Inversion', fmt('money', totals.spend), month ? `Gasto en ${month.name}` : 'Gasto acumulado'],
+      ['Impresiones', fmt('count', totals.impressions), month ? `En ${month.name}` : 'Total historico'],
+      ['Alcance', fmt('count', totals.reach), 'Suma diaria por publico'],
+      ['CPM prom.', fmt('money', totals.cpm), 'Costo por mil impresiones'],
+    ].map(([label, value, meta]) => `<div class="kpi-pill"><span>${label}</span><strong>${value}</strong><small>${esc(meta)}</small></div>`).join('');
+  }
+
+  function historyAdChip(ad) {
+    const url = data().safeUrl(ad.preview);
+    return url
+      ? `<a class="history-ad-link" href="${url}" target="_blank" rel="noopener noreferrer">${esc(ad.ad)}</a>`
+      : `<span class="history-ad-muted">${esc(ad.ad)}</span>`;
+  }
+
+  // La lista de anuncios va plegada: abierta estiraba la fila una linea por anuncio y ensanchaba la tabla.
+  function historyAdsCell(ads, campaign) {
+    if (!ads.length) return '<span class="no-data">-</span>';
+    return `<details class="history-ads" data-campaign="${esc(campaign)}"><summary>${ads.length} ${ads.length === 1 ? 'anuncio' : 'anuncios'}</summary><div class="history-ads-list">${ads.map(historyAdChip).join('')}</div></details>`;
+  }
+
+  // Una sola tabla con todas las campanas de las descargas de Meta en Drive. "Todos" lleva una columna de gasto
+  // por archivo mensual; un mes deja las campanas de su archivo con las cifras de ese mes y el acumulado al final.
+  function renderHistory() {
+    const head = document.getElementById('history-head');
+    const body = document.getElementById('history-body');
+    const snapshot = data()?.snapshot();
+    if (!head || !body || !snapshot) return;
+    const month = historyMonth();
+    state.historyMonth = month ? month.key : HISTORY_ALL;
+    state.historyYear = month ? month.year : validYear(snapshot, state.historyYear);
+    renderHistoryTabs(snapshot, state.historyYear, month);
+    const scoped = historyEntries(campaignHistory(snapshot), month);
+    renderHistoryStatus(scoped);
+    const entries = scoped.filter(entry => matchesStatus(entry.item, state.historyStatus));
+    renderHistoryKpis(snapshot, entries, month);
+
+    // Con descargas de mas de un año cada columna de mes lleva el suyo (Dic 26, Ene 27).
+    const multiYear = dataYears(snapshot).length > 1;
+    const months = month ? [] : snapshot.months.filter(item => item.hasData);
+    head.innerHTML = `<tr><th>Campaña</th><th>Objetivo</th><th>Estado</th>${months.map(item => {
+      const partial = !item.complete && !item.past;
+      return `<th class="num" title="${esc(item.fileName || `${item.name} ${item.year}`)}">${item.shortName}${multiYear ? ` ${String(item.year).slice(2)}` : ''}${partial ? ` (al ${item.lastDay})` : ''}</th>`;
+    }).join('')}<th class="num">${month ? `Gasto ${month.shortName}` : 'Gasto total'}</th><th class="num">Resultados</th><th class="num th-wrap">Costo por resultado</th><th class="num">Impresiones</th><th class="num">Alcance</th><th>Anuncios</th>${month
+      ? '<th>Dias activos</th><th class="num" title="Gasto de la campaña en todos los meses">Gasto acumulado</th>'
+      : '<th>Periodo</th>'}</tr>`;
+
+    const status = HISTORY_STATUS.find(item => item.key === state.historyStatus);
+    const noun = entries.length === 1 ? status.one : status.many;
+    const sub = document.getElementById('history-sub');
+    if (sub) {
+      if (!entries.length) {
+        sub.textContent = `Ninguna ${status.one} ${month ? `con gasto en ${month.name} ${month.year}` : 'en las descargas de Meta en Drive'}.`;
+      } else if (month) {
+        sub.textContent = `${entries.length} ${noun} con gasto en ${month.name} ${month.year} segun su archivo en Drive (${month.fileName || 'sin nombre'}).`;
+      } else {
+        const first = months[0];
+        const last = months[months.length - 1];
+        // Con mas de un año cada extremo del rango lleva el suyo.
+        const range = multiYear
+          ? `${first.name} ${first.year} a ${last.name} ${last.year}`
+          : `${months.length > 1 ? `${first.name} a ${last.name}` : first.name} ${snapshot.year}`;
+        sub.textContent = `${entries.length} ${noun} en ${months.length} ${months.length === 1 ? 'descarga' : 'descargas'} de Meta en Drive (${range}). Cada mes es el gasto de su archivo; el nombre aparece al pasar el mouse.`;
+      }
+    }
+    if (!entries.length) {
+      body.innerHTML = `<tr><td colspan="${head.querySelectorAll('th').length}" class="table-empty">Sin ${status.many} ${month ? `en ${esc(month.name)}` : 'en las descargas cargadas'}.</td></tr>`;
+      return;
+    }
+
+    const spendIn = (rows, key) => rows.reduce((sum, row) => (row.day.startsWith(key) ? sum + row.spend : sum), 0);
+    const daysLabel = (from, to) => (from === to ? `${from} ${month.shortName}` : `${from}-${to} ${month.shortName}`);
+    const allRows = entries.flatMap(entry => entry.rows);
+    const total = data().metrics.summarize(allRows);
+    const totalPeriod = month
+      ? daysLabel(Math.min(...entries.map(entry => entry.from)), Math.max(...entries.map(entry => entry.to)))
+      : periodLabel(entries.reduce((min, entry) => (entry.item.first < min ? entry.item.first : min), entries[0].item.first),
+        entries.reduce((max, entry) => (entry.item.last > max ? entry.item.last : max), entries[0].item.last));
+    body.innerHTML = entries.map(({ item, stats, ads, from, to }) => `
+      <tr>
+        <td class="campaign-name">${esc(item.name)}</td>
+        <td><span class="objective-label" style="--campaign-color:${item.color}"><i class="campaign-dot"></i>${esc(item.groupLabel)}</span></td>
+        <td>${item.finished ? '<span class="type-pill slate">Finalizada</span>' : '<span class="type-pill green">Activa</span>'}</td>
+        ${months.map(column => `<td class="num">${item.months.includes(column.key) ? fmt('money', spendIn(item.rows, column.key)) : '<span class="no-data">-</span>'}</td>`).join('')}
+        <td class="num"><b>${fmt('money', stats.spend)}</b></td>
+        <td class="num history-results"><b>${fmt('count', stats.results)}</b><small>${esc(stats.resultLabel)}</small></td>
+        <td class="num">${fmt('unitCost', stats.costPerResult)}</td>
+        <td class="num">${fmt('count', stats.impressions)}</td>
+        <td class="num">${fmt('count', stats.reach)}</td>
+        <td>${historyAdsCell(ads, item.name)}</td>
+        ${month
+          ? `<td class="date-col">${daysLabel(from, to)}</td><td class="num">${fmt('money', item.spend)}</td>`
+          : `<td class="date-col">${periodLabel(item.first, item.last)}</td>`}
+      </tr>`).join('') + `
+      <tr class="total-row">
+        <td class="campaign-name">${month ? `Total de ${esc(month.name)}` : 'Total'}</td>
+        <td></td><td></td>
+        ${months.map(item => `<td class="num">${entries.some(entry => entry.item.months.includes(item.key)) ? fmt('money', spendIn(allRows, item.key)) : '<span class="no-data">-</span>'}</td>`).join('')}
+        <td class="num">${fmt('money', total.spend)}</td>
+        <td class="num"><span class="no-data" title="Cada objetivo mide su propio resultado">No se suman</span></td>
+        <td></td>
+        <td class="num">${fmt('count', total.impressions)}</td>
+        <td class="num">${fmt('count', total.reach)}</td>
+        <td></td>
+        <td class="date-col">${totalPeriod}</td>
+        ${month ? '<td></td>' : ''}
+      </tr>`;
+  }
+
+  // ── Herramientas de la tabla de anuncios ─────────────────────────────────
+  function applyTableCompact() {
+    const panel = document.querySelector('.campaigns-panel');
+    const button = document.getElementById('campaigns-density-btn');
+    if (!panel || !button) return;
+    panel.classList.toggle('is-compact', state.tableCompact);
+    button.setAttribute('aria-pressed', String(state.tableCompact));
+    button.textContent = state.tableCompact ? 'Comodo' : 'Compacto';
+    button.setAttribute('title', state.tableCompact ? 'Volver a filas amplias' : 'Reducir el alto de las filas');
+  }
+
+  function toggleTableFullscreen(force) {
+    state.tableFullscreen = force == null ? !state.tableFullscreen : Boolean(force);
+    const panel = document.querySelector('.campaigns-panel');
+    const button = document.getElementById('campaigns-expand-btn');
+    const tabs = document.getElementById('ads-month-tabs');
+    const scroll = panel?.querySelector('.table-scroll');
+    if (!panel || !button) return;
+    panel.classList.toggle('is-fullscreen', state.tableFullscreen);
+    document.body.classList.toggle('excambiare-table-fullscreen', state.tableFullscreen);
+    // Las pestanas de mes viajan al panel para poder cambiar de mes sin salir.
+    if (tabs && scroll && state.tabsHome) {
+      if (state.tableFullscreen) panel.insertBefore(tabs, scroll);
+      else state.tabsHome.parent.insertBefore(tabs, state.tabsHome.next);
+    }
+    button.setAttribute('aria-pressed', String(state.tableFullscreen));
+    button.innerHTML = state.tableFullscreen ? '&#10005; Salir' : '&#10530; Pantalla completa';
+    button.setAttribute('title', state.tableFullscreen ? 'Salir de pantalla completa (Esc)' : 'Ver la tabla en pantalla completa (Esc para salir)');
+    if (state.tableFullscreen) scroll?.focus?.();
+  }
+
+  // ── Render y eventos ─────────────────────────────────────────────────────
+  // Gasto publicitario (view-obj) o Anuncios (view-ads): pestanas, periodo y todo lo que depende del mes elegido.
+  function renderPeriodView(viewId) {
+    const snapshot = data()?.snapshot();
+    if (!snapshot) return;
+    const month = selectedMonth();
+    state.year = viewYear();
+    state.monthKey = annualView() ? YEAR_KEY : month?.key || null;
+    const period = currentPeriod();
+    // Los objetivos del periodo se calculan una vez para los cuadros, la distribucion y los anuncios.
+    const objectives = period ? data().metrics.objectives(period.rows) : [];
+    if (viewId === 'view-ads') {
+      renderTabs(snapshot, 'ads-month-tabs');
+      renderPeriod(period, 'ads-');
+      renderTopAds(period, objectives);
+      renderAds(period, objectives);
+    } else {
+      renderTabs(snapshot);
+      renderPeriod(period);
+      renderKpis(period);
+      renderCampaigns(period, objectives);
+      renderDistribution(period, objectives);
+    }
+    state.rendered[viewId] = state.monthVersion;
+  }
+
+  // Al abrir Gasto publicitario o Anuncios: se repinta solo si el mes cambio en la otra vista.
+  function show(viewId) {
+    if (state.wired && PERIOD_VIEWS.includes(viewId) && state.rendered[viewId] !== state.monthVersion) renderPeriodView(viewId);
+  }
+
+  // Con datos nuevos se repintan todas las vistas; el Historico cambia de mes con sus propias pestanas.
+  function renderAll() {
+    PERIOD_VIEWS.forEach(renderPeriodView);
+    renderHistory();
+  }
+
+  function wireEvents() {
+    const adsTabs = document.getElementById('ads-month-tabs');
+    if (adsTabs) state.tabsHome = { parent: adsTabs.parentNode, next: adsTabs.nextSibling };
+    // Las pestanas de las dos vistas cambian el mismo mes: se pinta la vista de la pestana y la otra queda atrasada.
+    [['month-tabs', 'view-obj'], ['ads-month-tabs', 'view-ads']].forEach(([id, viewId]) => {
+      document.getElementById(id)?.addEventListener('click', event => {
+        const button = event.target.closest('.month-tab:not(:disabled)');
+        if (!button) return;
+        const year = Number(button.dataset.year);
+        if (year) {
+          if (year === viewYear()) return;
+          // Otro año: un mes pasa al ultimo mes con datos de ese año y la vista anual sigue en anual.
+          state.year = year;
+          if (state.monthKey !== YEAR_KEY) state.monthKey = latestMonthOf(data().snapshot(), year)?.key || null;
+        } else {
+          if (button.dataset.month === state.monthKey) return;
+          state.monthKey = button.dataset.month;
+        }
+        state.monthVersion += 1;
+        renderPeriodView(viewId);
+      });
+    });
+    document.getElementById('history-month-tabs')?.addEventListener('click', event => {
+      const button = event.target.closest('.month-tab:not(:disabled)');
+      if (!button) return;
+      const year = Number(button.dataset.year);
+      if (year) {
+        if (year === state.historyYear) return;
+        // Otro año: "Todos" se mantiene y un mes pasa al ultimo mes con datos de ese año.
+        state.historyYear = year;
+        if (state.historyMonth !== HISTORY_ALL) state.historyMonth = latestMonthOf(data().snapshot(), year)?.key || HISTORY_ALL;
+      } else {
+        if (button.dataset.month === state.historyMonth) return;
+        state.historyMonth = button.dataset.month;
+      }
+      renderHistory();
+    });
+    document.getElementById('history-status-filter')?.addEventListener('change', event => {
+      const input = event.target.closest('input[name="history-status"]');
+      if (!input) return;
+      state.historyStatus = input.value;
+      renderHistory();
+    });
+    // Indicadores, vista y minimizado de cada cuadro de campana.
+    const campaigns = document.getElementById('campaign-blocks');
+    campaigns?.addEventListener('change', event => {
+      const input = event.target.closest('input');
+      const block = input?.closest('.campaign-block');
+      const key = block?.dataset.objective;
+      if (!key) return;
+      if (input.closest('[data-campaign-modes]')) {
+        saveCampaignSettings(key, { mode: input.value });
+      } else {
+        // Siempre queda al menos un indicador: desmarcar el ultimo lo deja como estaba.
+        const checked = [...block.querySelectorAll('[data-campaign-metrics] input:checked')].map(item => item.value);
+        if (checked.length) saveCampaignSettings(key, { metrics: checked });
+      }
+      renderCampaignChart(key);
+    });
+    campaigns?.addEventListener('click', event => {
+      const key = event.target.closest('[data-campaign-toggle]')?.closest('.campaign-block')?.dataset.objective;
+      if (!key) return;
+      saveCampaignSettings(key, { collapsed: !campaignSettings(key).collapsed });
+      renderCampaignChart(key);
+    });
+    document.getElementById('ads-objective')?.addEventListener('change', event => {
+      state.adsObjective = event.target.value;
+      renderAds(currentPeriod());
+    });
+    document.getElementById('campaigns-density-btn')?.addEventListener('click', () => {
+      state.tableCompact = !state.tableCompact;
+      saveSetting(TABLE_COMPACT_KEY, state.tableCompact);
+      applyTableCompact();
+    });
+    document.getElementById('campaigns-expand-btn')?.addEventListener('click', () => toggleTableFullscreen());
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && state.tableFullscreen) toggleTableFullscreen(false);
+    });
+    // Cambiar de modulo con el panel fijo dejaria el body bloqueado.
+    document.querySelectorAll('[data-view-target]').forEach(button => {
+      button.addEventListener('click', () => { if (state.tableFullscreen) toggleTableFullscreen(false); });
+    });
+    applyTableCompact();
+    // Datos nuevos no cierran la lista de anuncios que el usuario tiene abierta en el Historico.
+    window.addEventListener('excambiare:data-updated', event => {
+      // Otra marca: el mes, el año y los filtros elegidos eran de la anterior; se vuelve a su ultimo mes con datos.
+      if (event.detail?.brandChanged) {
+        Object.assign(state, { monthKey: null, year: null, adsObjective: 'all', historyMonth: HISTORY_ALL, historyYear: null });
+        state.monthVersion += 1;
+      }
+      const body = document.getElementById('history-body');
+      const open = new Set([...(body?.querySelectorAll('details.history-ads[open]') || [])].map(node => node.dataset.campaign));
+      renderAll();
+      if (open.size) body.querySelectorAll('details.history-ads').forEach(node => { if (open.has(node.dataset.campaign)) node.open = true; });
+    });
+    // Sin datos de ningun origen: se reemplazan los "Cargando..." por el motivo.
+    window.addEventListener('excambiare:data-error', () => {
+      if (data().snapshot()) return;
+      const message = `No se pudieron cargar los datos (${data().status().error}). Pulsa Actualizar para reintentar.`;
+      ['', 'ads-'].forEach(prefix => {
+        const title = document.getElementById(`${prefix}period-title`);
+        if (title) title.textContent = 'Sin datos de Meta';
+        const sub = document.getElementById(`${prefix}period-sub`);
+        if (sub) sub.textContent = message;
+      });
+      [['distribution-body', 13], ['campaigns-body', 14], ['history-body', 10]].forEach(([id, span]) => {
+        const body = document.getElementById(id);
+        if (body) body.innerHTML = `<tr><td class="table-empty" colspan="${span}">${esc(message)}</td></tr>`;
+      });
+    });
+  }
+
+  function init() {
+    if (state.wired || !window.ExcambiareData) return;
+    state.wired = true;
+    wireEvents();
+    renderAll();
+  }
+
+  window.ExcambiareObjectives = { show };
+
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();

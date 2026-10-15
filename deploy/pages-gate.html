@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<!-- Plantilla: scripts/build.js la usa cuando hay DASHBOARD_PASSWORD (GitHub Pages) y rellena el marcador de
+     gate-payload con el tablero cifrado (AES-GCM, llave PBKDF2-SHA256 de la clave). Sin la clave el HTML no revela nada. -->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Inversiones Excambiare | Acceso</title>
+<link rel="icon" href="assets/favicon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap">
+<!-- Mismo diseno y azul que la pantalla de acceso de LR Suite; la clave no esta en el codigo: descifra el tablero. -->
+<style>
+  :root { --accent: #2563eb; --accent-dark: #1d4ed8; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  body { display: flex; overflow: hidden; background: #0f172a; color: #0f172a; }
+  .panel { width: 400px; max-width: 100%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    padding: 48px 44px; overflow-y: auto; background: #fff; }
+  .inner { width: 100%; max-width: 312px; }
+  .brand { margin-bottom: 16px; font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+  .title { margin: 0 0 28px; font-size: 38px; font-weight: 700; line-height: 1.1; letter-spacing: -.02em; color: #0f172a; }
+  .divider { width: 40px; height: 3px; margin-bottom: 36px; border-radius: 2px; background: var(--accent); }
+  form { display: flex; flex-direction: column; gap: 12px; }
+  input[type=password] { width: 100%; padding: 12px 16px; border: 1.5px solid #dce3ef; border-radius: 8px; outline: none; background: #e8f0fe;
+    color: #0f172a; font: inherit; font-size: 14px; transition: border-color .15s; }
+  input[type=password]::placeholder { color: #64748b; }
+  input[type=password]:focus { border-color: var(--accent); }
+  button { width: 100%; padding: 12px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font: inherit;
+    font-size: 14px; font-weight: 600; letter-spacing: .02em; cursor: pointer; transition: background .15s; }
+  button:hover { background: var(--accent-dark); }
+  button:disabled { opacity: .6; cursor: wait; }
+  .error { min-height: 18px; margin-top: 12px; font-size: 12px; color: #dc2626; }
+  /* El degradado es la capa de respaldo si la imagen falta o todavia no carga. */
+  .bg { flex: 1; min-width: 0; background-color: #0f172a; background-image: linear-gradient(140deg, var(--accent) 0%, var(--accent-dark) 38%, #0f172a 100%);
+    background-size: cover; background-position: center; filter: grayscale(20%); }
+  @media (max-width: 768px) {
+    .panel { width: 100%; padding: 32px 24px; }
+    .inner { max-width: 360px; }
+    .title { font-size: 30px; margin-bottom: 22px; }
+    .divider { margin-bottom: 26px; }
+    .bg { display: none; }
+  }
+  @media (max-height: 520px) {
+    .panel { align-items: flex-start; padding: 24px; }
+    .title { font-size: 26px; margin-bottom: 18px; }
+    .divider { margin-bottom: 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="panel">
+  <div class="inner">
+    <div class="brand">Lima Retail</div>
+    <h1 class="title">Inversiones Excambiare</h1>
+    <div class="divider"></div>
+    <form id="gate" autocomplete="off">
+      <input type="password" id="gate-password" aria-label="Contraseña" placeholder="Contraseña" autocomplete="current-password" required autofocus>
+      <button type="submit" id="gate-submit" disabled>Ingresar</button>
+    </form>
+    <div class="error" id="gate-error" role="alert"></div>
+  </div>
+</div>
+<div class="bg" id="gate-bg"></div>
+<script type="application/json" id="gate-payload">__PAYLOAD__</script>
+<script>
+// IIFE: document.open() conserva el mismo window, y un const global chocaria con los scripts del tablero.
+(function () {
+  var payload = JSON.parse(document.getElementById('gate-payload').textContent);
+  // La llave (no la clave) se guarda solo en sessionStorage, con la sal del build: evita volver a pedirla al
+  // recargar la pestana y se pierde al cerrarla. Nada queda guardado entre sesiones en este equipo.
+  var storageKey = 'excambiare-gate-key';
+  var bytes = function (b64) {
+    var text = atob(b64);
+    var out = new Uint8Array(text.length);
+    for (var i = 0; i < text.length; i++) out[i] = text.charCodeAt(i);
+    return out;
+  };
+  var toB64 = function (arr) { return btoa(String.fromCharCode.apply(null, arr)); };
+  // El tablero cifrado se decodifica una sola vez, aunque se pruebe la clave varias veces.
+  var cipherData = null;
+
+  function derive(password) {
+    return crypto.subtle.importKey('raw', new TextEncoder().encode(password.normalize('NFC')), 'PBKDF2', false, ['deriveBits'])
+      .then(function (base) {
+        return crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: bytes(payload.salt), iterations: payload.iterations }, base, 256);
+      })
+      .then(function (bits) { return new Uint8Array(bits); });
+  }
+
+  function readSaved() {
+    try {
+      var saved = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
+      if (saved && saved.salt === payload.salt && saved.key) return bytes(saved.key);
+    } catch (e) {}
+    return null;
+  }
+
+  function forget() {
+    ['sessionStorage', 'localStorage'].forEach(function (name) {
+      try { window[name].removeItem(storageKey); } catch (e) {}
+    });
+  }
+
+  function show(rawKey) {
+    return crypto.subtle.importKey('raw', rawKey, 'AES-GCM', false, ['decrypt'])
+      .then(function (key) {
+        cipherData = cipherData || bytes(payload.data);
+        return crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes(payload.iv) }, key, cipherData);
+      })
+      .then(function (plain) {
+        try { sessionStorage.setItem(storageKey, JSON.stringify({ salt: payload.salt, key: toB64(rawKey) })); } catch (e) {}
+        // Limpia la llave que pudo dejar la version con "Recordar en este equipo".
+        try { localStorage.removeItem(storageKey); } catch (e) {}
+        var html = new TextDecoder().decode(plain);
+        document.open();
+        document.write(html);
+        document.close();
+      });
+  }
+
+  // El fondo se aplica solo cuando termino de cargar; si falla queda el degradado.
+  function loadBackground() {
+    var background = new Image();
+    background.onload = function () {
+      var bg = document.getElementById('gate-bg');
+      if (bg) bg.style.backgroundImage = "url('assets/login-bg.jpg')";
+    };
+    background.src = 'assets/login-bg.jpg';
+  }
+
+  // En pantallas angostas .bg esta oculto: la foto se pide solo si el fondo llega a verse (al girar una tableta
+  // o agrandar la ventana). Safari < 14 solo tiene addListener/removeListener en MediaQueryList.
+  function showBackground() {
+    var narrow = window.matchMedia ? window.matchMedia('(max-width: 768px)') : null;
+    if (!narrow || !narrow.matches) { loadBackground(); return; }
+    var onChange = function () {
+      if (narrow.matches) return;
+      if (narrow.removeEventListener) narrow.removeEventListener('change', onChange); else narrow.removeListener(onChange);
+      // Si el tablero ya reemplazo esta pantalla, la foto no se veria.
+      if (document.getElementById('gate-bg')) loadBackground();
+    };
+    if (narrow.addEventListener) narrow.addEventListener('change', onChange); else narrow.addListener(onChange);
+  }
+
+  // Con la llave de esta sesion no se pide: la imagen retrasaria el 'load' que espera la apertura automatica.
+  var saved = readSaved();
+  if (!saved) showBackground();
+
+  var form = document.getElementById('gate');
+  var input = document.getElementById('gate-password');
+  var submit = document.getElementById('gate-submit');
+  var error = document.getElementById('gate-error');
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    if (!window.crypto || !crypto.subtle) { error.textContent = 'Este navegador no puede abrir el tablero.'; return; }
+    submit.disabled = true;
+    error.textContent = '';
+    // El build recorta la clave igual: con espacios en los extremos tambien abre.
+    derive(input.value.trim()).then(show).catch(function () {
+      submit.disabled = false;
+      error.textContent = 'Contraseña incorrecta';
+      input.select();
+    });
+  });
+
+  // El boton nace deshabilitado: mientras la pagina sigue bajando el tablero cifrado, Enter no envia el
+  // formulario (recargaria la pagina y se perderia lo escrito). Se habilita cuando ya se escucha el submit.
+  submit.disabled = false;
+
+  // Con la llave de esta sesion se abre solo, pero despues de 'load': si document.open() corre mientras
+  // el parser sigue activo no reemplaza la pagina y el tablero se mezcla con este formulario.
+  // Si la llave ya no abre el tablero (la clave cambio), queda el formulario con su fondo de siempre.
+  if (saved) {
+    document.body.style.visibility = 'hidden';
+    window.addEventListener('load', function () {
+      show(saved).catch(function () {
+        forget();
+        document.body.style.visibility = '';
+        showBackground();
+      });
+    }, { once: true });
+  }
+})();
+</script>
+</body>
+</html>

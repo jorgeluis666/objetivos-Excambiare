@@ -1,40 +1,64 @@
 (function () {
   const VIEW_KEY = 'excambiare-active-view';
+  // Modulos que muestran una sola marca. Gasto publicitario la elige desde el menu (una entrada por marca); el resto
+  // la cambia con el selector de la barra superior. Todos comparten la marca activa de js/data-source.js.
+  const BRAND_VIEWS = ['view-obj', 'view-ads', 'view-messages', 'view-history', 'view-reports'];
+  const SWITCH_VIEWS = ['view-ads', 'view-messages', 'view-history', 'view-reports'];
+  let currentView = 'view-obj';
   const VIEW_META = {
     'view-obj': {
       title: 'Gasto publicitario 2026',
       caption: 'Agencia Lima Retail',
-      status: 'Datos al 17 de septiembre',
-      source: 'Fuente: Distribucion-excambiare / Septiembre actualizado',
-      footer: 'Sincronizado por Agencia Lima Retail',
+      source: 'Fuente: Meta Ads / descargas mensuales en Google Drive',
+      footer: 'Barrido automatico todos los dias a las 10:00',
+    },
+    'view-ads': {
+      title: 'Anuncios',
+      caption: 'Meta Ads por anuncio',
+      source: 'Fuente: Meta Ads / descargas mensuales en Google Drive',
+      footer: 'Mismo mes que Gasto publicitario',
     },
     'view-messages': {
       title: 'Proyecciones',
-      caption: 'Cierre de mes proyectado',
-      status: 'Proyección sobre datos reales',
-      source: 'Fuente: Gasto publicitario / Distribucion-excambiare',
+      caption: 'Cierre de mes por objetivo',
+      source: 'Fuente: Gasto publicitario / Meta Ads',
       footer: 'Proyección lineal según el ritmo del mes',
+    },
+    'view-calculator': {
+      title: 'Calculadora de Inversión',
+      caption: 'Objetivo comercial e inversión por CPL',
+      source: 'Fuente: valores ingresados / CPL real de Meta Ads',
+      footer: 'Los valores se guardan en este navegador',
     },
     'view-history': {
       title: 'Histórico de Campañas',
-      caption: 'Campañas finalizadas',
-      status: 'Datos al 17 de septiembre',
-      source: 'Fuente: Distribucion-excambiare / Histórico consolidado',
-      footer: 'Solo campañas finalizadas',
+      caption: 'Campañas activas y finalizadas',
+      source: 'Fuente: Meta Ads / todos los meses con descarga',
+      footer: 'Todas las campañas de las descargas de Drive',
     },
     'view-reports': {
       title: 'Archivo de Reportes',
       caption: 'Documentos en Google Drive',
-      status: 'Catalogo al 17 de septiembre',
-      source: 'Fuente: Carpeta compartida Reportes Excambiare / Google Drive',
-      footer: 'Vista previa y descarga directa desde Drive',
+      source: 'Fuente: Carpeta de reportes de la marca / Google Drive',
+      footer: 'Validado contra las descargas de Meta del modulo Gasto publicitario',
     },
     'view-segments': {
       title: 'Segmentación',
       caption: 'Públicos de Meta Ads por marca',
-      status: 'Segmentación al 25 de septiembre',
-      source: 'Fuente: Segmentaciones Excambiare / Google Docs',
-      footer: 'MEX · Gold Fusion · Sol y Tierra',
+      source: 'Fuente: documento Segmentaciones Excambiare',
+      footer: 'Se actualiza al cambiar el documento fuente',
+    },
+    'view-log': {
+      title: 'Bitácora',
+      caption: 'Checklist de cambios, comentarios y decisiones',
+      source: 'Fuente: Bitácora del equipo de Agencia Lima Retail',
+      footer: 'Las ediciones quedan como borrador hasta exportar y publicar el archivo',
+    },
+    'view-users': {
+      title: 'Usuarios y Claves',
+      caption: 'Cuentas con acceso al tablero',
+      source: 'Fuente: Directorio de accesos de Agencia Lima Retail',
+      footer: 'La clave única descifra el tablero en el navegador; aquí no se guarda ninguna',
     },
   };
 
@@ -55,38 +79,71 @@
     }
   }
 
-  function showView(viewId) {
+  // Titulo, menu y selector dependen de la vista y de la marca activa: se repintan al cambiar cualquiera de las dos.
+  function renderChrome() {
+    const viewId = currentView;
     const meta = VIEW_META[viewId] || VIEW_META['view-obj'];
-    document.querySelectorAll('.view').forEach(view => {
-      view.classList.toggle('visible', view.id === viewId);
-    });
+    const brand = window.ExcambiareData?.brand();
+    const brandLabel = window.ExcambiareData?.brandLabel() || '';
+    const branded = BRAND_VIEWS.includes(viewId);
     document.querySelectorAll('[data-view-target]').forEach(button => {
-      const active = button.dataset.viewTarget === viewId;
+      const active = button.dataset.viewTarget === viewId && (!button.dataset.brand || button.dataset.brand === brand);
       button.classList.toggle('active', active);
       button.setAttribute('aria-current', active ? 'page' : 'false');
     });
-
-    document.getElementById('topbar-title').textContent = meta.title;
-    document.getElementById('topbar-caption').textContent = meta.caption;
-    document.getElementById('topbar-status').textContent = meta.status;
+    document.getElementById('topbar-title').textContent = viewId === 'view-obj' && brandLabel ? `${brandLabel} · ${meta.title}` : meta.title;
+    document.getElementById('topbar-caption').textContent = branded && viewId !== 'view-obj' && brandLabel ? `${brandLabel} · ${meta.caption}` : meta.caption;
+    // El estado de los datos (#topbar-status) es el mismo en todos los modulos: lo mantiene js/data-source.js.
     document.getElementById('footer-source').textContent = meta.source;
     document.getElementById('footer-status').textContent = meta.footer;
+    const switcher = document.getElementById('brand-switch');
+    if (switcher) {
+      switcher.hidden = !SWITCH_VIEWS.includes(viewId);
+      switcher.querySelectorAll('[data-brand-switch]').forEach(button => {
+        button.setAttribute('aria-pressed', String(button.dataset.brandSwitch === brand));
+      });
+    }
+  }
+
+  function showView(viewId, brand) {
+    currentView = VIEW_META[viewId] ? viewId : 'view-obj';
+    viewId = currentView;
+    // Una entrada de Gasto publicitario del menu cambia la marca antes de mostrar la vista.
+    if (brand) window.ExcambiareData?.setBrand(brand);
+    document.querySelectorAll('.view').forEach(view => {
+      view.classList.toggle('visible', view.id === viewId);
+    });
+    renderChrome();
     saveView(viewId);
 
-    if (viewId === 'view-messages') {
-      window.ExcambiareProjections?.init();
-      window.setTimeout(() => window.dispatchEvent(new Event('resize')), 0);
-    }
-    if (viewId === 'view-obj') window.setTimeout(() => window.dispatchEvent(new Event('resize')), 0);
-    if (viewId === 'view-history') window.ExcambiareObjectives?.renderHistory?.();
+    // Gasto publicitario y Anuncios comparten el mes: la que se abre se repinta si el mes cambio en la otra.
+    if (viewId === 'view-obj' || viewId === 'view-ads') window.ExcambiareObjectives?.show(viewId);
+    if (viewId === 'view-messages') window.ExcambiareProjections?.init();
+    if (viewId === 'view-calculator') window.MessagesCalculator?.init();
     if (viewId === 'view-reports') window.ReportsArchive?.init();
+    if (viewId === 'view-log') window.Bitacora?.init();
+    if (viewId === 'view-users') window.Usuarios?.init();
     if (viewId === 'view-segments') window.SegmentationModule?.init();
   }
 
-  function initNavigation() {
-    document.querySelectorAll('[data-view-target]').forEach(button => {
-      button.addEventListener('click', () => showView(button.dataset.viewTarget));
+  function renderBrandSwitch() {
+    const switcher = document.getElementById('brand-switch');
+    if (!switcher || !window.ExcambiareData) return;
+    switcher.innerHTML = window.ExcambiareData.brands()
+      .map(brand => `<button type="button" class="brand-tab" data-brand-switch="${brand.key}" aria-pressed="false">${brand.label}</button>`)
+      .join('');
+    switcher.addEventListener('click', event => {
+      const button = event.target.closest('[data-brand-switch]');
+      if (button) window.ExcambiareData.setBrand(button.dataset.brandSwitch);
     });
+  }
+
+  function initNavigation() {
+    renderBrandSwitch();
+    document.querySelectorAll('[data-view-target]').forEach(button => {
+      button.addEventListener('click', () => showView(button.dataset.viewTarget, button.dataset.brand));
+    });
+    window.addEventListener('excambiare:brand-changed', renderChrome);
     showView(storedView());
   }
 

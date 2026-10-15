@@ -1,250 +1,424 @@
 (function () {
-  const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-  const SHORT_MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-  const METRICS = {
-    investment: { key: 'investment', label: 'Inversion', unit: 'money', color: '#2563eb', fill: 'rgba(37,99,235,.10)', field: 'spend', reference: 'budget', referenceLabel: 'Presupuesto' },
-    messages: { key: 'messages', label: 'Mensajes', unit: 'count', color: '#16a34a', fill: 'rgba(22,163,74,.10)', field: 'messages', reference: null, referenceLabel: null },
-    reservations: { key: 'reservations', label: 'Reservas', unit: 'count', color: '#ea580c', fill: 'rgba(234,88,12,.10)', field: 'reservations', reference: 'reservationGoal', referenceLabel: 'Objetivo' },
+  // Formatos compartidos de js/data-source.js, que se carga antes que este archivo.
+  const { fmt, esc: escapeHtml, keepFocus, SHORT_MONTHS, CURRENCY } = window.ExcambiareData;
+  // Cada objetivo trae su color desde js/data-source.js; el gasto siempre va en azul.
+  const SPEND_COLOR = '#2563eb';
+  const HANDLE_HIT_RADIUS = 16;
+  const SERIES = {
+    results: { key: 'results', label: 'Resultados', axis: 'y', unit: 'count' },
+    spend: { key: 'spend', label: 'Gasto', axis: 'y1', unit: 'money' },
   };
 
-  const state = { ready: false, metric: 'investment', chart: null, projection: null };
+  const state = {
+    ready: false,
+    campaign: null,
+    visible: { results: true, spend: true },
+    // Escenarios por mes y objetivo: { [mes]: { [objetivo]: { results: valor, spend: valor } } }.
+    // El punto actual siempre queda en el ultimo dia con datos; solo cambia su valor.
+    scenarios: {},
+    chart: null,
+    projection: null,
+    // Objetivos y acumulados diarios del ultimo barrido (no dependen del escenario).
+    base: null,
+    drag: null,
+    // Un barrido que llega durante el arrastre se pinta al soltar el punto.
+    pendingRender: false,
+  };
 
-  const money = value => Number.isFinite(Number(value))
-    ? `S/. ${Number(value).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-    : '-';
-  const count = value => Number.isFinite(Number(value)) ? Number(value).toLocaleString('es-PE', { maximumFractionDigits: 0 }) : '-';
-  const format = (value, unit) => (unit === 'money' ? money(value) : count(Math.round(Number(value) || 0)));
+  const money = fmt.money;
+  const count = fmt.count;
+  // Un objetivo sin resultados proyectados muestra 0.00 de costo por resultado.
+  const unitCost = value => fmt.unitCost(value ?? 0);
+  const format = (value, unit) => (unit === 'money' ? money(value) : count(Number(value) || 0));
 
-  function toDate(iso) {
-    const value = /^\d{4}-\d{2}-\d{2}$/.test(String(iso)) ? `${iso}T00:00:00` : iso;
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? null : date;
+  function scenarioFor(monthKey, objectiveKey) {
+    state.scenarios[monthKey] = state.scenarios[monthKey] || {};
+    state.scenarios[monthKey][objectiveKey] = state.scenarios[monthKey][objectiveKey] || {};
+    return state.scenarios[monthKey][objectiveKey];
   }
 
-  function longDate(date) {
-    return date ? `${date.getDate()} de ${MONTHS[date.getMonth()].toLowerCase()} de ${date.getFullYear()}` : '-';
+  // Ritmo lineal: el acumulado al ultimo dia con datos dividido entre los dias transcurridos desde el primer
+  // dia con datos, extendido hasta fin de mes. daily es el acumulado real dia a dia (indice 0 = dia 1).
+  function buildSeries(daily, firstDay, lastDay, daysInMonth, closed, override) {
+    const actual = daily[lastDay - 1] || 0;
+    // Un mes cerrado no tiene punto arrastrable: muestra el real aunque quede un escenario en memoria.
+    const adjusted = !closed && Number.isFinite(override);
+    const elapsed = Math.max(1, lastDay - firstDay + 1);
+    const daysLeft = daysInMonth - lastDay;
+    const value = adjusted ? override : actual;
+    const pace = value / elapsed;
+    const realPace = actual / elapsed;
+    return {
+      daily,
+      actual,
+      realPace,
+      day: lastDay,
+      value,
+      pace,
+      projected: closed ? actual : value + pace * daysLeft,
+      adjusted,
+    };
   }
 
-  // El mes proyectado es el que esta en curso; si aun no tiene gasto, se usa el ultimo mes con datos.
-  function pickMonth(months, cutoff) {
-    const withData = months.filter(month => Number(month.spend) > 0);
-    if (!withData.length) return null;
-    const reference = toDate(cutoff) || new Date();
-    const current = withData.find(month => MONTHS.indexOf(month.name) === reference.getMonth());
-    return current || withData[withData.length - 1];
-  }
-
-  function buildProjection(snapshot) {
-    const month = pickMonth(snapshot.months || [], snapshot.cutoff);
-    if (!month) return null;
-
-    const monthIndex = MONTHS.indexOf(month.name);
-    const year = snapshot.year || (toDate(snapshot.cutoff) || new Date()).getFullYear();
-    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
-    const cutoffDate = toDate(snapshot.cutoff);
-    const sameMonth = cutoffDate && cutoffDate.getMonth() === monthIndex && cutoffDate.getFullYear() === year;
-    const closed = !sameMonth;
-    const daysWithData = closed ? daysInMonth : Math.min(daysInMonth, Math.max(1, cutoffDate.getDate()));
-    const daysLeft = daysInMonth - daysWithData;
-
-    const reservationGoal = (month.campaigns || []).reduce((total, campaign) => total + (Number(campaign.reservationGoal) || 0), 0) || null;
-    const references = { budget: Number(month.budgetTotal) || null, reservationGoal, messages: null };
-
-    const metrics = Object.values(METRICS).map(metric => {
-      const actual = Number(month[metric.field]) || 0;
-      const pace = actual / daysWithData;
-      const projected = closed ? actual : pace * daysInMonth;
-      const reference = metric.reference ? references[metric.reference] : null;
+  // Se calcula una vez por barrido: al arrastrar el punto actual solo se rehace la proyeccion, no las sumas.
+  function baseFor(dataSource, month) {
+    const snapshot = dataSource.snapshot();
+    if (state.base?.snapshot === snapshot) return state.base.objectives;
+    const { metrics } = dataSource;
+    const objectives = metrics.objectives(month.rows).map(objective => {
+      const filter = row => row.group === objective.key;
       return {
-        ...metric,
-        actual,
-        pace,
-        projected,
-        reference,
-        gap: reference == null ? null : reference - projected,
-        requiredPace: reference == null || daysLeft <= 0 ? null : Math.max(0, (reference - actual) / daysLeft),
+        objective,
+        results: metrics.cumulative(metrics.dailyValues(month, 'results', filter)),
+        spend: metrics.cumulative(metrics.dailyValues(month, 'spend', filter)),
+      };
+    });
+    state.base = { snapshot, objectives };
+    return objectives;
+  }
+
+  // Se proyecta el ultimo mes con datos, por objetivo: cada objetivo mide un resultado distinto
+  // (interacciones, ThruPlays, visitas al perfil) y los resultados no se suman entre si.
+  function buildProjection() {
+    const dataSource = window.ExcambiareData;
+    const month = dataSource?.latestMonth();
+    if (!month || !month.hasData || !month.lastDay) return null;
+    const closed = month.complete || month.past;
+    const firstDay = month.firstDay || 1;
+    // Un mes cerrado cuya descarga no llega al ultimo dia (pauta apagada al final) corta en su ultimo dia con datos:
+    // despues no hay acumulado que leer.
+    const lastDay = month.lastDay;
+    const daysInMonth = month.daysInMonth;
+
+    const campaigns = baseFor(dataSource, month).map(({ objective, results: dailyResults, spend: dailySpend }) => {
+      const scenario = scenarioFor(month.key, objective.key);
+      const results = buildSeries(dailyResults, firstDay, lastDay, daysInMonth, closed, scenario.results);
+      const spend = buildSeries(dailySpend, firstDay, lastDay, daysInMonth, closed, scenario.spend);
+      return {
+        key: objective.key,
+        name: objective.campaigns.join(' / '),
+        short: objective.label,
+        type: `${objective.campaigns.length} ${objective.campaigns.length === 1 ? 'campaña' : 'campañas'}`,
+        resultLabel: objective.resultLabel,
+        color: objective.color,
+        results,
+        spend,
+        costPerResult: results.projected > 0 ? spend.projected / results.projected : null,
+        adjusted: results.adjusted || spend.adjusted,
       };
     });
 
-    const byKey = Object.fromEntries(metrics.map(metric => [metric.key, metric]));
-    const projectedSpend = byKey.investment.projected;
-    const projectedMessages = byKey.messages.projected;
-    const projectedReservations = byKey.reservations.projected;
+    const spendActual = campaigns.reduce((total, campaign) => total + campaign.spend.actual, 0);
+    const spendProjected = campaigns.reduce((total, campaign) => total + campaign.spend.projected, 0);
 
     return {
+      monthKey: month.key,
       monthName: month.name,
-      monthLabel: `${month.name} ${year}`,
-      shortMonth: SHORT_MONTHS[monthIndex],
-      year,
+      monthLabel: `${month.name} ${month.year}`,
+      shortMonth: SHORT_MONTHS[month.month - 1],
       daysInMonth,
-      daysWithData,
-      daysLeft,
+      daysWithData: lastDay,
+      daysLeft: closed ? 0 : daysInMonth - lastDay,
       closed,
-      cutoffDate,
-      source: snapshot.source,
-      metrics,
-      byKey,
-      budget: references.budget,
-      budgetUsedPct: references.budget ? (byKey.investment.actual / references.budget) * 100 : null,
-      budgetProjectedPct: references.budget ? (projectedSpend / references.budget) * 100 : null,
-      costPerMessage: byKey.messages.actual ? byKey.investment.actual / byKey.messages.actual : null,
-      costPerReservation: byKey.reservations.actual ? byKey.investment.actual / byKey.reservations.actual : null,
-      projectedCostPerMessage: projectedMessages ? projectedSpend / projectedMessages : null,
-      projectedCostPerReservation: projectedReservations ? projectedSpend / projectedReservations : null,
+      campaigns,
+      spendActual,
+      spendProjected,
+      spendPace: spendActual / Math.max(1, lastDay - firstDay + 1),
+      spendAdjusted: campaigns.some(campaign => campaign.spend.adjusted),
     };
+  }
+
+  function selectedCampaign(projection) {
+    if (!projection.campaigns.length) return null;
+    return projection.campaigns.find(campaign => campaign.key === state.campaign) || projection.campaigns[0];
   }
 
   function renderKpis(projection) {
     const host = document.getElementById('projection-kpis');
     if (!host) return;
-    const investment = projection.byKey.investment;
-    const messages = projection.byKey.messages;
-    const reservations = projection.byKey.reservations;
-    const budgetHint = projection.budget
-      ? `${projection.budgetProjectedPct.toFixed(0)}% del presupuesto (${money(projection.budget)})`
-      : 'Sin presupuesto registrado';
-    const goalHint = reservations.reference
-      ? `Objetivo ${count(reservations.reference)} | ${reservations.gap >= 0 ? `faltan ${count(Math.abs(Math.round(reservations.gap)))}` : `sobre el objetivo por ${count(Math.abs(Math.round(reservations.gap)))}`}`
-      : 'Sin objetivo registrado';
-
-    const cards = [
-      { label: 'Inversion proyectada', value: money(investment.projected), hint: budgetHint },
-      { label: 'Mensajes proyectados', value: count(Math.round(messages.projected)), hint: `Ritmo ${count(Math.round(messages.pace))} por dia` },
-      { label: 'Reservas proyectadas', value: count(Math.round(reservations.projected)), hint: goalHint },
-      { label: 'Ritmo de inversion', value: `${money(investment.pace)} / dia`, hint: projection.closed ? 'Mes cerrado' : `Quedan ${projection.daysLeft} dias del mes` },
-      { label: 'Avance del mes', value: `${projection.daysWithData} de ${projection.daysInMonth} dias`, hint: `Datos al ${longDate(projection.cutoffDate)}` },
+    const budgetHint = `Ritmo real ${money(projection.spendPace)} por dia`;
+    const spendCards = [
+      `<div class="kpi-pill"><span>Gasto al ${projection.daysWithData}-${projection.shortMonth}</span><strong>${money(projection.spendActual)}</strong><small>${projection.closed ? 'Mes cerrado' : `Quedan ${projection.daysLeft} dias del mes`}</small></div>`,
+      `<div class="kpi-pill"><span>Gasto proyectado</span><strong>${money(projection.spendProjected)}</strong><small>${projection.spendAdjusted ? 'Incluye escenarios ajustados' : budgetHint}</small></div>`,
     ];
+    const selected = selectedCampaign(projection);
+    const campaignCards = projection.campaigns.map(campaign => `
+      <button type="button" class="kpi-pill projection-campaign-card${campaign === selected ? ' active' : ''}${campaign.adjusted ? ' is-adjusted' : ''}" data-campaign="${escapeHtml(campaign.key)}" style="--campaign-color:${campaign.color}" title="${escapeHtml(campaign.name)}">
+        <span><i class="campaign-dot"></i>${escapeHtml(campaign.short)} | ${escapeHtml(campaign.resultLabel)}</span>
+        <strong>${count(campaign.results.projected)}</strong>
+        <small>Gasto proyectado ${money(campaign.spend.projected)}</small>
+      </button>`);
+    // Elegir un objetivo con Enter rehace las tarjetas: el foco vuelve a la del mismo objetivo.
+    keepFocus(host, () => {
+      host.innerHTML = spendCards.concat(campaignCards).join('');
+    });
+  }
 
-    host.innerHTML = cards.map(card => `
-      <div class="kpi-pill">
-        <span>${card.label}</span>
-        <strong>${card.value}</strong>
-        <small>${card.hint}</small>
-      </div>
-    `).join('');
+  function renderCampaignChips(projection) {
+    const host = document.getElementById('projection-campaigns');
+    if (!host) return;
+    const selected = selectedCampaign(projection);
+    // Con las flechas del teclado el foco sigue en el radio elegido aunque se rehaga el grupo.
+    keepFocus(host, () => {
+      host.innerHTML = projection.campaigns.map(campaign => `
+        <label class="series-toggle campaign-chip${campaign === selected ? ' active' : ''}" style="--campaign-color:${campaign.color}" title="${escapeHtml(campaign.name)}">
+          <input type="radio" name="projection-campaign" value="${escapeHtml(campaign.key)}"${campaign === selected ? ' checked' : ''}>${escapeHtml(campaign.short)}
+        </label>`).join('');
+    });
   }
 
   function renderTable(projection) {
     const body = document.getElementById('projection-body');
     if (!body) return;
-    const rows = projection.metrics.map(metric => {
-      const gap = metric.gap == null
-        ? '<span class="no-data">Sin referencia</span>'
-        : `<span class="projection-gap ${metric.gap >= 0 ? 'ok' : 'over'}">${metric.gap >= 0 ? '' : '+'}${format(Math.abs(metric.gap), metric.unit)} ${metric.gap >= 0 ? 'por debajo' : 'por encima'}</span>`;
+    const rows = projection.campaigns.map(campaign => {
+      const status = campaign.adjusted
+        ? '<span class="projection-gap over">Escenario ajustado</span>'
+        : '<span class="projection-gap ok">Ritmo real</span>';
       return `
         <tr>
-          <td class="campaign-name">${metric.label}</td>
-          <td class="num">${format(metric.actual, metric.unit)}</td>
-          <td class="num">${format(metric.pace, metric.unit)}</td>
-          <td class="num projection-value">${format(metric.projected, metric.unit)}</td>
-          <td class="num">${metric.reference == null ? '<span class="no-data">-</span>' : format(metric.reference, metric.unit)}</td>
-          <td>${gap}</td>
+          <td class="campaign-name"><span class="campaign-dot" style="--campaign-color:${campaign.color}"></span>${escapeHtml(campaign.short)}</td>
+          <td class="projection-campaigns-col">${escapeHtml(campaign.type)}<small class="projection-campaign-full">${escapeHtml(campaign.name)}</small></td>
+          <td><span class="objective-pill">${escapeHtml(campaign.resultLabel)}</span></td>
+          <td class="num">${count(campaign.results.actual)}</td>
+          <td class="num">${count(campaign.results.pace)}</td>
+          <td class="num projection-value">${count(campaign.results.projected)}</td>
+          <td class="num">${money(campaign.spend.actual)}</td>
+          <td class="num projection-value">${money(campaign.spend.projected)}</td>
+          <td class="num">${unitCost(campaign.costPerResult)}</td>
+          <td>${status}</td>
         </tr>`;
     }).join('');
 
-    const costRow = `
+    const totalRow = `
       <tr class="projection-cost-row">
-        <td class="campaign-name">Costo por mensaje / reserva</td>
-        <td class="num">${money(projection.costPerMessage)} / ${money(projection.costPerReservation)}</td>
-        <td class="num"><span class="no-data">-</span></td>
-        <td class="num projection-value">${money(projection.projectedCostPerMessage)} / ${money(projection.projectedCostPerReservation)}</td>
-        <td class="num"><span class="no-data">-</span></td>
-        <td><span class="no-data">Se mantiene si el ritmo no cambia</span></td>
+        <td class="campaign-name">Total del mes</td>
+        <td></td>
+        <td><span class="no-data">Los resultados no se suman entre objetivos</span></td>
+        <td></td><td></td><td></td>
+        <td class="num">${money(projection.spendActual)}</td>
+        <td class="num projection-value">${money(projection.spendProjected)}</td>
+        <td></td>
+        <td></td>
       </tr>`;
 
-    body.innerHTML = rows + costRow;
+    body.innerHTML = rows ? rows + totalRow : '<tr><td class="table-empty" colspan="10">No hay campañas con gasto en el mes.</td></tr>';
 
     const head = document.getElementById('projection-actual-head');
-    if (head) head.textContent = `Actual al ${projection.daysWithData}-${projection.shortMonth}`;
+    if (head) head.textContent = `Resultados al ${projection.daysWithData}-${projection.shortMonth}`;
     const closeHead = document.getElementById('projection-close-head');
     if (closeHead) closeHead.textContent = `Proyeccion al ${projection.daysInMonth}-${projection.shortMonth}`;
   }
 
-  function renderLegend(projection, metric) {
+  function renderLegend(projection, campaign) {
     const host = document.getElementById('projection-legend');
     if (!host) return;
-    const items = [
-      `<span><i class="legend-line" style="background:${metric.color}"></i><b>Acumulado real</b></span>`,
-      `<span><i class="legend-line dashed" style="background:${metric.color}"></i><b>Proyeccion al cierre</b></span>`,
-    ];
-    if (metric.reference != null) {
-      items.push(`<span><i class="legend-line dashed" style="background:#94a3b8"></i><b>${metric.referenceLabel}</b></span>`);
+    const items = [];
+    if (state.visible.results) {
+      items.push(`<span><i class="legend-line" style="background:${campaign.color}"></i><b>${escapeHtml(campaign.resultLabel)} real</b></span>`);
+      items.push(`<span><i class="legend-line dashed" style="color:${campaign.color}"></i><b>${escapeHtml(campaign.resultLabel)} proyectado</b></span>`);
     }
+    if (state.visible.spend) {
+      items.push(`<span><i class="legend-line" style="background:${SPEND_COLOR}"></i><b>Gasto real</b></span>`);
+      items.push(`<span><i class="legend-line dashed" style="color:${SPEND_COLOR}"></i><b>Gasto proyectado</b></span>`);
+    }
+    if (campaign.adjusted) items.push('<span><i class="legend-line dashed" style="color:#94a3b8"></i><b>Proyeccion original</b></span>');
+    if (!projection.closed) items.push('<span><i class="legend-handle"></i><b>Punto actual (arrastrar arriba o abajo)</b></span>');
     host.innerHTML = items.join('');
   }
 
-  const cutoffMarker = {
-    id: 'cutoffMarker',
+  function renderScenarioBar(projection, campaign) {
+    const host = document.getElementById('projection-scenario');
+    if (!host) return;
+    if (projection.closed || !campaign) {
+      host.hidden = true;
+      return;
+    }
+    host.hidden = false;
+    const day = `${projection.daysWithData}-${projection.shortMonth}`;
+    const inputValue = (key, series) => (key === 'results' ? String(Math.round(series.value)) : series.value.toFixed(2));
+    const note = (key, series) => (series.adjusted ? `real ${format(series.actual, SERIES[key].unit)}` : 'valor real');
+    // El HTML solo se rehace si cambia el objetivo, su tipo de resultado o el dia de corte. Al escribir un valor o
+    // arrastrar el punto los campos se actualizan en el lugar para no sacar el foco del campo (Tab, Enter).
+    const signature = `${campaign.key}|${campaign.resultLabel}|${day}`;
+    if (host.dataset.signature === signature && host.querySelector('input[data-series]')) {
+      ['results', 'spend'].forEach(key => {
+        const input = host.querySelector(`input[data-series="${key}"]`);
+        if (!input) return;
+        const value = inputValue(key, campaign[key]);
+        if (input.value !== value) input.value = value;
+        const em = input.closest('.projection-scenario-field')?.querySelector('em');
+        if (em) em.textContent = note(key, campaign[key]);
+      });
+      const reset = document.getElementById('projection-reset');
+      if (reset) reset.disabled = !campaign.adjusted;
+      return;
+    }
+    host.dataset.signature = signature;
+    const field = (key, label, step) => `
+      <label class="projection-scenario-field">
+        <span>${escapeHtml(label)} al ${day}</span>
+        <input type="number" min="0" step="${step}" value="${inputValue(key, campaign[key])}" data-series="${key}" aria-label="${escapeHtml(label)} al ${day}">
+        <em>${note(key, campaign[key])}</em>
+      </label>`;
+    keepFocus(host, () => {
+      host.innerHTML = `
+        <div class="projection-scenario-text">
+          ${field('results', campaign.resultLabel, 1)}
+          ${field('spend', `Gasto (${CURRENCY})`, 0.01)}
+        </div>
+        <button type="button" class="table-tool-btn" id="projection-reset" ${campaign.adjusted ? '' : 'disabled'}>Restablecer punto actual</button>`;
+    });
+  }
+
+  // Linea vertical en el dia de corte real y etiqueta de valor sobre cada punto arrastrable.
+  const projectionMarkers = {
+    id: 'projectionMarkers',
     afterDatasetsDraw(chart, args, options) {
-      const index = options?.index;
-      if (index == null || index < 0) return;
-      const x = chart.scales.x.getPixelForValue(index);
-      const { top, bottom } = chart.chartArea;
       const ctx = chart.ctx;
-      ctx.save();
-      ctx.setLineDash([4, 4]);
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(x, top);
-      ctx.lineTo(x, bottom);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle = '#7890b5';
-      ctx.font = '700 9px Inter, sans-serif';
-      ctx.textAlign = x > (chart.chartArea.left + chart.chartArea.right) / 2 ? 'right' : 'left';
-      ctx.fillText(options.label || 'Ultima actualizacion', x + (ctx.textAlign === 'right' ? -6 : 6), top + 10);
-      ctx.restore();
+      const { top, bottom, left, right } = chart.chartArea;
+      const index = options?.index;
+      if (index != null && index >= 0) {
+        const x = chart.scales.x.getPixelForValue(index);
+        ctx.save();
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, top);
+        ctx.lineTo(x, bottom);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#7890b5';
+        ctx.font = '700 9px Inter, sans-serif';
+        ctx.textAlign = x > (left + right) / 2 ? 'right' : 'left';
+        ctx.fillText(options.label || 'Ultima actualizacion', x + (ctx.textAlign === 'right' ? -6 : 6), top + 10);
+        ctx.restore();
+      }
+      chart.data.datasets.forEach((dataset, datasetIndex) => {
+        if (!dataset.handle || !chart.isDatasetVisible(datasetIndex)) return;
+        const point = chart.getDatasetMeta(datasetIndex).data[dataset.handleIndex];
+        if (!point) return;
+        const text = format(dataset.data[dataset.handleIndex], dataset.unit);
+        ctx.save();
+        if (dataset.realValue != null && dataset.realValue !== dataset.data[dataset.handleIndex]) {
+          const realY = chart.scales[dataset.yAxisID].getPixelForValue(dataset.realValue);
+          ctx.setLineDash([2, 3]);
+          ctx.strokeStyle = dataset.borderColor;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(point.x, realY);
+          ctx.lineTo(point.x, point.y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        ctx.font = '700 10px Inter, sans-serif';
+        const width = ctx.measureText(text).width + 12;
+        const x = Math.min(Math.max(point.x - width / 2, left), right - width);
+        // Resultados etiqueta arriba y gasto abajo para que no se tapen cuando las lineas se acercan.
+        const above = dataset.seriesKey !== 'spend';
+        const y = above ? (point.y - 28 < top ? point.y + 12 : point.y - 28) : (point.y + 29 > bottom ? point.y - 28 : point.y + 12);
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = dataset.borderColor;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(x, y, width, 17, 5);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = dataset.borderColor;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, x + 6, y + 9);
+        ctx.restore();
+      });
     },
   };
+
+  function seriesDatasets(series, meta, projection, draggable) {
+    const days = projection.daysInMonth;
+    // La linea real es el acumulado dia a dia de la descarga de Meta; la proyeccion parte del punto actual.
+    const real = Array.from({ length: days }, (_, i) => (i + 1 <= series.day ? series.daily[i] ?? null : null));
+    const forecast = Array.from({ length: days }, (_, i) => (i + 1 >= series.day ? series.value + series.pace * (i + 1 - series.day) : null));
+    const original = Array.from({ length: days }, (_, i) => (i + 1 >= series.day ? series.actual + series.realPace * (i + 1 - series.day) : null));
+    const handle = Array.from({ length: days }, (_, i) => (i + 1 === series.day ? series.value : null));
+    const base = { yAxisID: meta.axis, unit: meta.unit, pointRadius: 0, pointHoverRadius: 4, tension: 0, seriesKey: meta.key };
+    const datasets = [
+      { ...base, label: `${meta.label} real`, data: real, borderColor: meta.color, backgroundColor: meta.fill, borderWidth: 2, fill: meta.key === 'results' ? 'origin' : false },
+      { ...base, label: `${meta.label} proyectado`, data: projection.closed ? [] : forecast, borderColor: meta.color, borderDash: [6, 5], borderWidth: 2, fill: false },
+    ];
+    if (series.adjusted) {
+      datasets.push({ ...base, label: `${meta.label} proyeccion original`, data: original, borderColor: '#94a3b8', borderDash: [3, 4], borderWidth: 1.5, fill: false });
+    }
+    if (draggable) {
+      datasets.push({ ...base, label: `${meta.label} punto actual`, data: handle, borderColor: meta.color, backgroundColor: '#fff', borderWidth: 3, pointRadius: 7, pointHoverRadius: 9, showLine: false, handle: true, handleIndex: series.day - 1, realValue: series.actual });
+    }
+    return datasets;
+  }
+
+  function chartDatasets(projection, campaign) {
+    const draggable = !projection.closed;
+    const datasets = [];
+    if (state.visible.results) {
+      datasets.push(...seriesDatasets(campaign.results, { ...SERIES.results, label: campaign.resultLabel, color: campaign.color, fill: `${campaign.color}1a` }, projection, draggable));
+    }
+    if (state.visible.spend) {
+      datasets.push(...seriesDatasets(campaign.spend, { ...SERIES.spend, color: SPEND_COLOR, fill: 'rgba(37,99,235,.08)' }, projection, draggable));
+    }
+    return datasets;
+  }
 
   function renderChart(projection) {
     const canvas = document.getElementById('chart-projection');
     if (!canvas || typeof Chart === 'undefined') return;
-    const metric = projection.byKey[state.metric] || projection.byKey.investment;
-    const labels = Array.from({ length: projection.daysInMonth }, (_, index) => `${index + 1} ${projection.shortMonth}`);
-    const real = labels.map((_, index) => (index + 1 <= projection.daysWithData ? metric.pace * (index + 1) : null));
-    const forecast = labels.map((_, index) => (index + 1 >= projection.daysWithData ? metric.pace * (index + 1) : null));
-
-    const datasets = [
-      { label: 'Acumulado real', data: real, borderColor: metric.color, backgroundColor: metric.fill, borderWidth: 2, pointRadius: 0, pointHoverRadius: 5, tension: .15, fill: true, unit: metric.unit },
-      { label: 'Proyeccion al cierre', data: projection.closed ? [] : forecast, borderColor: metric.color, borderDash: [6, 5], borderWidth: 2, pointRadius: 0, pointHoverRadius: 5, tension: .15, fill: false, unit: metric.unit },
-    ];
-    if (metric.reference != null) {
-      datasets.push({ label: metric.referenceLabel, data: labels.map(() => metric.reference), borderColor: '#94a3b8', borderDash: [3, 4], borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 0, fill: false, unit: metric.unit });
+    const campaign = selectedCampaign(projection);
+    if (state.chart) {
+      state.chart.destroy();
+      state.chart = null;
     }
+    if (!campaign) {
+      renderLegend(projection, { adjusted: false });
+      return;
+    }
+    const labels = Array.from({ length: projection.daysInMonth }, (_, index) => `${index + 1} ${projection.shortMonth}`);
+    const money0 = value => (value === 0 ? `${CURRENCY} 0` : `${CURRENCY} ${Number(value).toLocaleString('es-PE', { maximumFractionDigits: 0 })}`);
 
-    const ticks = metric.unit === 'money'
-      ? value => (value === 0 ? 'S/. 0' : `S/. ${(value / 1000).toFixed(1)}k`)
-      : value => Number(value).toLocaleString('es-PE');
-
-    if (state.chart) state.chart.destroy();
     state.chart = new Chart(canvas, {
       type: 'line',
-      data: { labels, datasets },
+      data: { labels, datasets: chartDatasets(projection, campaign) },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: false,
         interaction: { mode: 'index', intersect: false },
-        layout: { padding: { top: 18, right: 14, left: 4 } },
+        layout: { padding: { top: 18, right: 8, left: 4 } },
         plugins: {
           legend: { display: false },
-          cutoffMarker: { index: projection.daysWithData - 1, label: `Datos al ${projection.daysWithData}-${projection.shortMonth}` },
+          projectionMarkers: { index: projection.daysWithData - 1, label: `Datos al ${projection.daysWithData}-${projection.shortMonth}` },
           tooltip: {
+            filter: item => item.raw != null && !item.dataset.handle,
             callbacks: {
-              label: context => (context.raw == null ? null : ` ${context.dataset.label}: ${format(context.raw, metric.unit)}`),
+              label: context => ` ${context.dataset.label}: ${format(context.raw, context.dataset.unit)}`,
             },
           },
         },
         scales: {
           x: { grid: { display: false }, border: { color: '#cbd5e1' }, ticks: { color: '#7890b5', font: { size: 10 }, maxTicksLimit: 10, autoSkip: true } },
-          y: { beginAtZero: true, border: { display: false }, grid: { color: 'rgba(148,163,184,.20)' }, ticks: { color: '#7890b5', font: { size: 10 }, callback: ticks } },
+          y: {
+            display: 'auto', position: 'left', beginAtZero: true, border: { display: false }, grid: { color: 'rgba(148,163,184,.20)' },
+            title: { display: true, text: campaign.resultLabel, color: campaign.color, font: { size: 10, weight: '700' } },
+            ticks: { color: '#7890b5', font: { size: 10 }, callback: value => Number(value).toLocaleString('es-PE') },
+          },
+          y1: {
+            // Con ambas series visibles el gasto recibe margen extra para que su linea corra por debajo de la de resultados.
+            display: 'auto', position: 'right', beginAtZero: true, grace: state.visible.results ? '60%' : 0, border: { display: false }, grid: { drawOnChartArea: !state.visible.results },
+            title: { display: true, text: 'Gasto', color: SPEND_COLOR, font: { size: 10, weight: '700' } },
+            ticks: { color: '#7890b5', font: { size: 10 }, callback: money0 },
+          },
         },
       },
-      plugins: [cutoffMarker],
+      plugins: [projectionMarkers],
     });
 
-    renderLegend(projection, metric);
+    renderLegend(projection, campaign);
   }
 
   function renderHeader(projection) {
@@ -254,65 +428,251 @@
     if (sub) {
       sub.textContent = projection.closed
         ? `Mes cerrado con ${projection.daysInMonth} dias de datos.`
-        : `Datos reales hasta el dia ${projection.daysWithData} y proyeccion lineal hasta el ${projection.daysInMonth}.`;
+        : `Datos reales hasta el dia ${projection.daysWithData} y proyeccion lineal hasta el ${projection.daysInMonth}. Arrastra el punto actual hacia arriba o abajo para simular otro escenario.`;
     }
     const note = document.getElementById('projection-note');
     if (note) {
-      note.textContent = `La proyeccion asume que se mantiene el ritmo promedio del mes (${money(projection.byKey.investment.pace)} por dia). Fuente: ${projection.source || 'Distribucion-excambiare'}.`;
+      note.textContent = `Cada objetivo mide un resultado distinto (interacciones, ThruPlays, visitas al perfil), por eso se proyectan por separado. La linea continua es el acumulado real de cada dia; la punteada mantiene el ritmo diario del punto actual hasta el cierre del mes. Fuente: Meta Ads | ${window.ExcambiareData.statusLabel()}.`;
     }
     const desc = document.getElementById('projection-desc');
     if (desc) {
-      desc.textContent = `Proyeccion al cierre de ${projection.monthLabel} calculada con los datos reales del modulo Gasto publicitario, actualizados al ${longDate(projection.cutoffDate)}.`;
+      desc.textContent = projection.closed
+        ? `${projection.monthLabel} ya cerro: se muestran sus resultados finales por objetivo con los datos del modulo Gasto publicitario.`
+        : `Proyeccion al cierre de ${projection.monthLabel} por objetivo, calculada con los datos reales del modulo Gasto publicitario hasta el ${projection.daysWithData} de ${projection.monthName.toLowerCase()}.`;
+    }
+  }
+
+  // Sin datos se oculta el contenido del panel (sin borrarlo) para que vuelva cuando llegue un barrido bueno.
+  function setPanelEmpty(empty) {
+    const panel = document.getElementById('projection-panel');
+    if (!panel) return;
+    panel.classList.toggle('is-empty', empty);
+    let notice = document.getElementById('projection-empty');
+    if (empty && !notice) {
+      notice = document.createElement('div');
+      notice.id = 'projection-empty';
+      notice.className = 'empty-state projection-empty';
+      notice.innerHTML = '<strong>Sin datos para proyectar</strong>No hay descargas de Meta con gasto en la carpeta de Drive.';
+      panel.appendChild(notice);
     }
   }
 
   function renderEmpty() {
-    const panel = document.getElementById('projection-panel');
-    if (panel) panel.innerHTML = '<div class="empty-state"><strong>Sin datos para proyectar</strong>Todavia no hay gasto registrado en el mes en curso.</div>';
+    if (state.chart) {
+      state.chart.destroy();
+      state.chart = null;
+    }
+    setPanelEmpty(true);
+    // Las tarjetas y la descripcion van fuera del panel: no deben quedar las del barrido anterior.
+    const kpis = document.getElementById('projection-kpis');
+    if (kpis) kpis.innerHTML = '';
+    const desc = document.getElementById('projection-desc');
+    if (desc) desc.textContent = 'Sin datos para proyectar: no hay descargas de Meta con gasto en la carpeta de Drive.';
     const body = document.getElementById('projection-body');
-    if (body) body.innerHTML = '<tr><td class="table-empty" colspan="6">Sin datos para proyectar.</td></tr>';
+    if (body) body.innerHTML = '<tr><td class="table-empty" colspan="10">Sin datos para proyectar.</td></tr>';
   }
 
+  // Sin datos de ningun origen se muestra el motivo en vez de seguir esperando.
   function renderWaiting() {
+    const error = window.ExcambiareData?.status().error;
+    const message = error ? `No se pudieron cargar los datos (${error}). Pulsa Actualizar para reintentar.` : 'Esperando los datos de Meta...';
     const sub = document.getElementById('projection-sub');
-    if (sub) sub.textContent = 'Esperando los datos del modulo Gasto publicitario...';
+    if (sub) sub.textContent = message;
     const body = document.getElementById('projection-body');
-    if (body) body.innerHTML = '<tr><td class="table-empty" colspan="6">Esperando los datos del modulo Gasto publicitario...</td></tr>';
+    if (body) body.innerHTML = `<tr><td class="table-empty" colspan="10">${escapeHtml(message)}</td></tr>`;
+  }
+
+  function recompute() {
+    state.projection = buildProjection();
+    return state.projection;
+  }
+
+  // Durante el arrastre solo se actualizan los datos del grafico; recrearlo cortaria el gesto.
+  function refreshAfterScenario() {
+    const projection = recompute();
+    if (!projection) return;
+    const campaign = selectedCampaign(projection);
+    renderKpis(projection);
+    renderTable(projection);
+    renderScenarioBar(projection, campaign);
+    renderLegend(projection, campaign);
+    if (state.chart && campaign) {
+      state.chart.data.datasets = chartDatasets(projection, campaign);
+      state.chart.update('none');
+    }
   }
 
   function render() {
-    // El modulo puede abrirse antes de que Gasto publicitario termine de cargar; el evento excambiare:data-updated lo reintenta.
-    const snapshot = window.ExcambiareObjectives?.snapshot?.();
-    if (!snapshot) {
+    // El modulo puede abrirse antes de que lleguen los datos; el evento excambiare:data-updated lo reintenta.
+    if (!window.ExcambiareData?.snapshot()) {
       renderWaiting();
       return;
     }
-    const projection = buildProjection(snapshot);
-    state.projection = projection;
+    const projection = recompute();
     if (!projection) {
       renderEmpty();
       return;
     }
+    setPanelEmpty(false);
+    const campaign = selectedCampaign(projection);
+    state.campaign = campaign?.key || null;
     renderHeader(projection);
     renderKpis(projection);
+    renderCampaignChips(projection);
     renderChart(projection);
+    renderScenarioBar(projection, campaign);
     renderTable(projection);
   }
 
+  function selectCampaign(key) {
+    if (!key || key === state.campaign) return;
+    state.campaign = key;
+    render();
+  }
+
+  function handleAt(chart, x, y) {
+    let best = null;
+    chart.data.datasets.forEach((dataset, datasetIndex) => {
+      if (!dataset.handle) return;
+      const point = chart.getDatasetMeta(datasetIndex).data[dataset.handleIndex];
+      if (!point) return;
+      const distance = Math.hypot(point.x - x, point.y - y);
+      if (distance <= HANDLE_HIT_RADIUS && (!best || distance < best.distance)) best = { dataset, distance };
+    });
+    return best?.dataset || null;
+  }
+
+  function canvasPoint(event) {
+    const rect = event.target.getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  }
+
+  function setScenarioValue(seriesKey, value) {
+    if (!state.projection || !Number.isFinite(value)) return;
+    const rounded = seriesKey === 'spend' ? Math.round(value * 100) / 100 : Math.round(value);
+    scenarioFor(state.projection.monthKey, state.campaign)[seriesKey] = Math.max(0, rounded);
+    refreshAfterScenario();
+  }
+
+  function wireDrag() {
+    const canvas = document.getElementById('chart-projection');
+    if (!canvas) return;
+
+    canvas.addEventListener('pointerdown', event => {
+      const chart = state.chart;
+      if (!chart || !state.projection || state.projection.closed) return;
+      const { x, y } = canvasPoint(event);
+      const handle = handleAt(chart, x, y);
+      if (!handle) return;
+      event.preventDefault();
+      // Se congela el eje para que la escala no se mueva mientras se arrastra.
+      const scale = chart.scales[handle.yAxisID];
+      chart.options.scales[handle.yAxisID].max = scale.max;
+      const point = chart.getDatasetMeta(chart.data.datasets.indexOf(handle)).data[handle.handleIndex];
+      state.drag = { series: handle.seriesKey, axis: handle.yAxisID, max: scale.max, offset: y - point.y, pointerId: event.pointerId };
+      canvas.setPointerCapture(event.pointerId);
+      canvas.classList.add('is-dragging');
+      chart.options.plugins.tooltip.enabled = false;
+    });
+
+    // En tactil el navegador fija el touch-action al empezar el toque, asi que .is-dragging llega tarde:
+    // el desplazamiento de la pagina se bloquea aqui, y solo si el toque cae sobre el punto arrastrable.
+    canvas.addEventListener('touchstart', event => {
+      const chart = state.chart;
+      const touch = event.changedTouches[0];
+      if (!chart || !touch || !state.projection || state.projection.closed) return;
+      const rect = canvas.getBoundingClientRect();
+      if (handleAt(chart, touch.clientX - rect.left, touch.clientY - rect.top)) event.preventDefault();
+    }, { passive: false });
+
+    canvas.addEventListener('pointermove', event => {
+      const chart = state.chart;
+      if (!chart) return;
+      const { x, y } = canvasPoint(event);
+      if (!state.drag) {
+        canvas.classList.toggle('can-drag', Boolean(!state.projection?.closed && handleAt(chart, x, y)));
+        return;
+      }
+      // Solo se mueve en vertical sobre el dia de corte y sin salir del area del grafico.
+      const { top, bottom } = chart.chartArea;
+      const pixel = Math.min(bottom, Math.max(top, y - state.drag.offset));
+      const value = Math.min(state.drag.max, Math.max(0, chart.scales[state.drag.axis].getValueForPixel(pixel)));
+      setScenarioValue(state.drag.series, value);
+    });
+
+    const endDrag = event => {
+      if (!state.drag) return;
+      if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+      const chart = state.chart;
+      if (chart) {
+        delete chart.options.scales[state.drag.axis].max;
+        chart.options.plugins.tooltip.enabled = true;
+        chart.update('none');
+      }
+      state.drag = null;
+      canvas.classList.remove('is-dragging');
+      if (state.pendingRender) {
+        state.pendingRender = false;
+        render();
+      }
+    };
+    canvas.addEventListener('pointerup', endDrag);
+    canvas.addEventListener('pointercancel', endDrag);
+  }
+
   function wireEvents() {
-    document.getElementById('projection-metrics')?.addEventListener('change', event => {
+    document.getElementById('projection-campaigns')?.addEventListener('change', event => {
       const input = event.target.closest('input[type="radio"]');
+      if (input) selectCampaign(input.value);
+    });
+
+    document.getElementById('projection-kpis')?.addEventListener('click', event => {
+      const card = event.target.closest('[data-campaign]');
+      if (card) selectCampaign(card.dataset.campaign);
+    });
+
+    document.getElementById('projection-series')?.addEventListener('change', event => {
+      const input = event.target.closest('input[type="checkbox"]');
       if (!input) return;
-      state.metric = input.value;
-      document.querySelectorAll('#projection-metrics .series-toggle').forEach(label => {
-        label.classList.toggle('active', label.dataset.series === state.metric);
+      state.visible[input.value] = input.checked;
+      // Siempre queda al menos una serie visible.
+      if (!state.visible.results && !state.visible.spend) {
+        state.visible[input.value] = true;
+        input.checked = true;
+      }
+      document.querySelectorAll('#projection-series .series-toggle').forEach(label => {
+        label.classList.toggle('active', Boolean(state.visible[label.querySelector('input')?.value]));
       });
       if (state.projection) renderChart(state.projection);
     });
 
-    window.addEventListener('excambiare:data-updated', () => {
-      if (state.ready) render();
+    document.getElementById('projection-scenario')?.addEventListener('change', event => {
+      const input = event.target.closest('input[data-series]');
+      if (!input || input.value === '') return;
+      setScenarioValue(input.dataset.series, Number(input.value));
     });
+
+    document.getElementById('projection-scenario')?.addEventListener('click', event => {
+      if (!event.target.closest('#projection-reset') || !state.projection) return;
+      delete state.scenarios[state.projection.monthKey]?.[state.campaign];
+      render();
+    });
+
+    window.addEventListener('excambiare:data-updated', () => {
+      if (!state.ready) return;
+      // Recrear el grafico a mitad del arrastre cortaria el gesto: el barrido se pinta al soltar.
+      if (state.drag) {
+        state.pendingRender = true;
+        return;
+      }
+      render();
+    });
+
+    window.addEventListener('excambiare:data-error', () => {
+      if (state.ready && !window.ExcambiareData?.snapshot()) renderWaiting();
+    });
+
+    wireDrag();
   }
 
   function init() {
@@ -323,5 +683,5 @@
     render();
   }
 
-  window.ExcambiareProjections = { init, render };
+  window.ExcambiareProjections = { init };
 })();
