@@ -48,6 +48,12 @@
       source: 'Fuente: documento Segmentaciones Excambiare',
       footer: 'Se actualiza al cambiar el documento fuente',
     },
+    'view-week': {
+      title: 'Generación de Reporte',
+      caption: 'Semana de lunes a domingo',
+      source: 'Fuente: descargas de Meta Ads / carpeta Reportes de Drive',
+      footer: 'La semana que acaba de pasar, lista cada lunes',
+    },
     'view-log': {
       title: 'Bitácora',
       caption: 'Checklist de cambios, comentarios y decisiones',
@@ -121,6 +127,7 @@
     if (viewId === 'view-messages') window.ExcambiareProjections?.init();
     if (viewId === 'view-calculator') window.MessagesCalculator?.init();
     if (viewId === 'view-reports') window.ReportsArchive?.init();
+    if (viewId === 'view-week') window.ReporteSemanal?.init();
     if (viewId === 'view-log') window.Bitacora?.init();
     if (viewId === 'view-users') window.Usuarios?.init();
     if (viewId === 'view-segments') window.SegmentationModule?.init();

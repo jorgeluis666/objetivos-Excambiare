@@ -45,6 +45,7 @@ La version vive en tres lugares: `package.json`, la etiqueta del panel lateral (
 - Archivo de Reportes: catalogo de la carpeta de reportes de la marca y validacion contra su Gasto publicitario.
   Nombres de los reportes: `SolyTierra_Octubre2026` (mensual) o `SolyTierra_1-13Oct2026` (parcial).
 - Segmentacion: publicos de Meta Ads por marca y comparativo entre marcas (ver "Segmentacion").
+- Generacion de Reporte: el reporte semanal de lunes a domingo, con el orden del ultimo reporte de la carpeta de Drive y descarga en PDF (ver "Generacion de Reporte").
 - Bitacora: checklist mensual de cambios, comentarios y decisiones de la cuenta.
 - Usuarios y Claves: directorio de quien tiene acceso al tablero, sin contrasenas.
 
@@ -81,6 +82,29 @@ la carpeta de Drive de cada marca.
 - Un mes anterior al mes en curso de Lima se trata como cerrado aunque su descarga no llegue al ultimo dia.
 - El alcance es la suma de las filas de la descarga, igual que en los reportes de la agencia (no el alcance sin
   duplicar de Meta).
+
+## Generacion de Reporte
+
+Pestana que arma el reporte de la semana que acaba de pasar, de lunes a domingo, con el mismo orden del
+ultimo reporte publicado en la carpeta Reportes de Drive: resumen del periodo, conversaciones por dia,
+mejores anuncios, conjuntos y campanas, y conclusiones.
+
+- **De donde salen los numeros:** de las mismas filas del barrido de Meta que usa Gasto publicitario (una
+  fila por dia, campana, conjunto y anuncio). No hay una fuente nueva ni una lectura extra.
+- **Que semana muestra:** la ultima de lunes a domingo ya cerrada (en hora de Lima). El selector deja ver
+  las 12 anteriores. La semana en curso no se lista: el reporte es de semana completa.
+- **Cada lunes se puebla solo:** el tablero relee el barrido al abrirse y con Actualizar, y el workflow de Pages vuelve a publicar todos los dias despues del barrido.
+- **Si la descarga del mes no llega al domingo**, el reporte lo avisa arriba y nombra los dias que faltan:
+  los totales pueden subir cuando se suba la descarga nueva.
+- **Resultados:** cada objetivo mide el suyo (ThruPlay, interacciones, contactos...), asi que no se suman
+  entre si. Con columna de conversaciones, ese es el numero que encabeza; si no, encabeza el tipo con mas inversion y los demas van en el desglose. El reporte sigue a la marca elegida arriba (Sol y Tierra, Mex Cream o Gold Fusion) y la nombra en la portada.
+- **Conclusiones:** las dos primeras vienen propuestas con lo que dice la semana y se editan en la pestana;
+  quedan guardadas por semana en el navegador (`excambiare-week-notes-v1`), no se publican con el tablero.
+- **Descargar PDF** abre el dialogo de impresion con el reporte solo (sin panel lateral ni barra superior)
+  y el nombre del archivo ya armado.
+
+El modulo es `js/report-week.js` y es el mismo archivo en todos los tableros de marca: lo unico que cambia
+es el bloque `CONFIG` de arriba. Sus estilos y los de impresion estan al final de `css/dashboard.css`.
 
 ## Calculadora de Inversion
 
