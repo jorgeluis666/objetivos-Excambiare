@@ -2,8 +2,8 @@
   const VIEW_KEY = 'excambiare-active-view';
   // Modulos que muestran una sola marca. Gasto publicitario la elige desde el menu (una entrada por marca); el resto
   // la cambia con el selector de la barra superior. Todos comparten la marca activa de js/data-source.js.
-  const BRAND_VIEWS = ['view-obj', 'view-ads', 'view-messages', 'view-history', 'view-reports'];
-  const SWITCH_VIEWS = ['view-ads', 'view-messages', 'view-history', 'view-reports'];
+  const BRAND_VIEWS = ['view-obj', 'view-ads', 'view-messages', 'view-history', 'view-reports', 'view-week'];
+  const SWITCH_VIEWS = ['view-ads', 'view-messages', 'view-history', 'view-reports', 'view-week'];
   let currentView = 'view-obj';
   const VIEW_META = {
     'view-obj': {
@@ -49,8 +49,9 @@
       footer: 'Se actualiza al cambiar el documento fuente',
     },
     'view-week': {
-      title: 'Generación de Reporte',
-      caption: 'Semana de lunes a domingo',
+      parent: 'view-reports',   // va dentro de Archivo de Reportes, con su pestaña
+      title: 'Archivo de Reportes',
+      caption: 'Generación de Reporte · semana de lunes a domingo',
       source: 'Fuente: descargas de Meta Ads / carpeta Reportes de Drive',
       footer: 'La semana que acaba de pasar, lista cada lunes',
     },
@@ -86,8 +87,11 @@
     const brand = window.ExcambiareData?.brand();
     const brandLabel = window.ExcambiareData?.brandLabel() || '';
     const branded = BRAND_VIEWS.includes(viewId);
+    // El menú marca el módulo; las pestañas de adentro, la sección abierta.
     document.querySelectorAll('[data-view-target]').forEach(button => {
-      const active = button.dataset.viewTarget === viewId && (!button.dataset.brand || button.dataset.brand === brand);
+      const target = button.dataset.viewTarget;
+      const active = (target === viewId || (button.classList.contains('s-item') && target === meta.parent))
+        && (!button.dataset.brand || button.dataset.brand === brand);
       button.classList.toggle('active', active);
       button.setAttribute('aria-current', active ? 'page' : 'false');
     });
