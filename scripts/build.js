@@ -124,13 +124,12 @@ async function main() {
   // Se incrustan, en el orden de index.html, todos los js/ que carga: no hay otra lista que mantener.
   html = html.replace(/<script src="js\/([\w-]+\.js)(?:\?v=[^"]+)?"><\/script>/g, (_, file) => `<script>${readFile(`js/${file}`)}</script>`);
   if (/<script src="js\//.test(html)) throw new Error('index.html carga un js/ que el build no incrusta');
-  // La bitacora y el directorio de usuarios viajan incrustados: dist/ no lleva la carpeta data/.
+  // La bitacora viaja incrustada: dist/ no lleva la carpeta data/.
   const inlineJson = file => JSON.stringify(JSON.parse(readFile(file))).replace(/</g, '\\u003c');
   const bitacora = inlineJson('data/excambiare-bitacora.json');
-  const usuarios = inlineJson('data/excambiare-usuarios.json');
   // Publicos de Meta Ads por marca del modulo Segmentacion (transcritos del documento fuente).
   const segmentation = inlineJson('data/excambiare-segmentation.json');
-  const config = `window.EXCAMBIARE_DATA_ENDPOINT = ${JSON.stringify(endpoint)};window.EXCAMBIARE_META_DATA = ${metaData};window.EXCAMBIARE_BITACORA = ${bitacora};window.EXCAMBIARE_USUARIOS = ${usuarios};window.EXCAMBIARE_SEGMENTATION = ${segmentation};`;
+  const config = `window.EXCAMBIARE_DATA_ENDPOINT = ${JSON.stringify(endpoint)};window.EXCAMBIARE_META_DATA = ${metaData};window.EXCAMBIARE_BITACORA = ${bitacora};window.EXCAMBIARE_SEGMENTATION = ${segmentation};`;
   html = html.replace('</head>', () => `<script>${config}</script></head>`);
 
   // Salida en LF tanto en Windows (checkout con CRLF) como en CI: el mismo codigo da el mismo dist/index.html.

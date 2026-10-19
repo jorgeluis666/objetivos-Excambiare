@@ -5,7 +5,7 @@ de Inversiones Excambiare: **Sol y Tierra**, **Mex Cream** y **Gold Fusion**. Ca
 descargas y su carpeta de reportes; el tablero las muestra por separado (los resultados de una marca no se suman con
 los de otra). Montos en soles (`CURRENCY` en `js/data-source.js`).
 
-Version actual: `v2.0.1` (v1.x era el tablero anterior, sobre una hoja manual).
+Version actual: `v2.2.0` (v1.x era el tablero anterior, sobre una hoja manual).
 
 ## Versionado
 
@@ -23,7 +23,6 @@ La version vive en tres lugares: `package.json`, la etiqueta del panel lateral (
 - Anuncios, Proyecciones, Historico de Campanas y Archivo de Reportes muestran una marca a la vez: se elige con el
   selector de la barra superior. Es la misma marca activa en todo el tablero: abrir el Gasto publicitario de Mex
   Cream deja Mex Cream elegida en los demas modulos. Se recuerda en `localStorage` (`excambiare-brand`).
-- Calculadora, Segmentacion, Bitacora y Usuarios y Claves son comunes a las tres marcas.
 - Al cambiar de marca, Gasto publicitario y Anuncios vuelven al ultimo mes con datos de esa marca.
 - La lista de marcas vive en `BRANDS` de `js/data-source.js` y de `scripts/google-sheets-sync.gs`; agregar una marca
   es sumarla en los dos y crear sus propiedades del script.
@@ -47,7 +46,10 @@ La version vive en tres lugares: `package.json`, la etiqueta del panel lateral (
 - Segmentacion: publicos de Meta Ads por marca y comparativo entre marcas (ver "Segmentacion").
 - Generacion de Reporte: el reporte semanal de lunes a domingo, con el orden del ultimo reporte de la carpeta de Drive y descarga en PDF (ver "Generacion de Reporte").
 - Bitacora: checklist mensual de cambios, comentarios y decisiones de la cuenta.
-- Usuarios y Claves: directorio de quien tiene acceso al tablero, sin contrasenas.
+
+El pie del panel lateral lleva el nombre de la cuenta, el WhatsApp de Agencia Lima Retail
+(+51 937 409 733) y www.limaretail.com. El modulo "Usuarios y Claves" salio del tablero; el
+directorio guardado sigue en el repositorio por si hace falta recuperarlo.
 
 ## Datos
 
@@ -114,14 +116,6 @@ es el bloque `CONFIG` de arriba. Sus estilos y los de impresion estan al final d
   mes con datos; se oculta si ese mes no tuvo esa campana.
 - Los valores se guardan en `localStorage` (`excambiare_messages_calculator_v1`) de ese navegador.
 
-## Bitacora y Usuarios y Claves
-
-Las versiones publicadas son `data/excambiare-bitacora.json` y `data/excambiare-usuarios.json` (el build las incrusta
-como `window.EXCAMBIARE_BITACORA` y `window.EXCAMBIARE_USUARIOS`). Se editan en el tablero como borrador
-(`localStorage`), **Exportar** descarga el JSON, se reemplaza en `data/`, commit y push a `main`.
-
-Ojo: mientras el repo sea publico, lo que se publique en estos dos archivos tambien lo es. El tablero se abre con
-una sola clave para todos (secret `DASHBOARD_PASSWORD`); aqui nunca se guarda ninguna clave.
 
 ## Segmentacion
 
