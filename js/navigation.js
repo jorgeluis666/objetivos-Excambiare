@@ -2,8 +2,9 @@
   const VIEW_KEY = 'excambiare-active-view';
   // Modulos que muestran una sola marca. Gasto publicitario la elige desde el menu (una entrada por marca); el resto
   // la cambia con el selector de la barra superior. Todos comparten la marca activa de js/data-source.js.
-  const BRAND_VIEWS = ['view-obj', 'view-ads', 'view-messages', 'view-history', 'view-reports', 'view-week'];
-  const SWITCH_VIEWS = ['view-ads', 'view-messages', 'view-history', 'view-reports', 'view-week'];
+  // Generacion de Reporte no esta: el PDF lleva las tres marcas.
+  const BRAND_VIEWS = ['view-obj', 'view-ads', 'view-messages', 'view-history', 'view-reports'];
+  const SWITCH_VIEWS = ['view-ads', 'view-messages', 'view-history', 'view-reports'];
   let currentView = 'view-obj';
   const VIEW_META = {
     'view-obj': {
@@ -51,9 +52,9 @@
     'view-week': {
       parent: 'view-reports',   // va dentro de Archivo de Reportes, con su pestaña
       title: 'Archivo de Reportes',
-      caption: 'Generación de Reporte · semana de lunes a domingo',
-      source: 'Fuente: descargas de Meta Ads / carpeta Reportes de Drive',
-      footer: 'La semana que acaba de pasar, lista cada lunes',
+      caption: 'Generación de Reporte · Reporte de Publicidad de las tres marcas',
+      source: 'Fuente: descargas de Meta Ads de las tres marcas',
+      footer: 'El mes elegido, listo para descargar en PDF',
     },
     'view-log': {
       title: 'Bitácora',

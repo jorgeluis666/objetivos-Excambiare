@@ -5,7 +5,7 @@ de Inversiones Excambiare: **Sol y Tierra**, **Mex Cream** y **Gold Fusion**. Ca
 descargas y su carpeta de reportes; el tablero las muestra por separado (los resultados de una marca no se suman con
 los de otra). Montos en soles (`CURRENCY` en `js/data-source.js`).
 
-Version actual: `v2.2.0` (v1.x era el tablero anterior, sobre una hoja manual).
+Version actual: `v2.4.0` (v1.x era el tablero anterior, sobre una hoja manual).
 
 ## Versionado
 
@@ -44,7 +44,7 @@ La version vive en tres lugares: `package.json`, la etiqueta del panel lateral (
 - Archivo de Reportes: catalogo de la carpeta de reportes de la marca y validacion contra su Gasto publicitario.
   Nombres de los reportes: `SolyTierra_Octubre2026` (mensual) o `SolyTierra_1-13Oct2026` (parcial).
 - Segmentacion: publicos de Meta Ads por marca y comparativo entre marcas (ver "Segmentacion").
-  - Pestana Generacion de Reporte, dentro de Archivo de Reportes: el reporte semanal de lunes a domingo, con el orden del ultimo reporte de la carpeta de Drive y descarga en PDF (ver "Generacion de Reporte").
+  - Pestana Generacion de Reporte, dentro de Archivo de Reportes: el Reporte de Publicidad mensual de las tres marcas con el diseño del modelo de Excambiare y descarga en PDF (ver "Generacion de Reporte").
 - Bitacora: checklist mensual de cambios, comentarios y decisiones de la cuenta.
 
 El pie del panel lateral lleva el nombre de la cuenta, el WhatsApp de Agencia Lima Retail
@@ -87,26 +87,54 @@ la carpeta de Drive de cada marca.
 
 ## Generacion de Reporte
 
-Pestana que arma el reporte de la semana que acaba de pasar, de lunes a domingo, con el mismo orden del
-ultimo reporte publicado en la carpeta Reportes de Drive: resumen del periodo, conversaciones por dia,
-mejores anuncios, conjuntos y campanas, y conclusiones.
+Pestana que arma el "Reporte de Publicidad" de las tres marcas en un solo PDF, con el diseño del modelo de
+Excambiare (`Modelo Reporte Inversiones Excambiare`): laminas 16:9 con fondo claro, tarjetas blancas de borde
+fino y acentos en azul. No sigue a la marca elegida arriba: lleva MEX (Mex Cream), Gold Fusion y Sol y Tierra
+(`ExcambiareData.brandSnapshot()`), asi que en esta pestana no aparece el selector de marca.
 
-- **De donde salen los numeros:** de las mismas filas del barrido de Meta que usa Gasto publicitario (una
-  fila por dia, campana, conjunto y anuncio). No hay una fuente nueva ni una lectura extra.
-- **Que semana muestra:** la ultima de lunes a domingo ya cerrada (en hora de Lima). El selector deja ver
-  las 12 anteriores. La semana en curso no se lista: el reporte es de semana completa.
-- **Cada lunes se puebla solo:** el tablero relee el barrido al abrirse y con Actualizar, y el workflow de Pages vuelve a publicar todos los dias despues del barrido.
-- **Si la descarga del mes no llega al domingo**, el reporte lo avisa arriba y nombra los dias que faltan:
-  los totales pueden subir cuando se suba la descarga nueva.
-- **Resultados:** cada objetivo mide el suyo (ThruPlay, interacciones, contactos...), asi que no se suman
-  entre si. Con columna de conversaciones, ese es el numero que encabeza; si no, encabeza el tipo con mas inversion y los demas van en el desglose. El reporte sigue a la marca elegida arriba (Sol y Tierra, Mex Cream o Gold Fusion) y la nombra en la portada.
-- **Conclusiones:** las dos primeras vienen propuestas con lo que dice la semana y se editan en la pestana;
-  quedan guardadas por semana en el navegador (`excambiare-week-notes-v1`), no se publican con el tablero.
-- **Descargar PDF** abre el dialogo de impresion con el reporte solo (sin panel lateral ni barra superior)
-  y el nombre del archivo ya armado.
+| Pagina | Contenido |
+| --- | --- |
+| Portada | Logo de Lima Retail, "Reporte de Publicidad", cliente, periodo ("1 – 18 Octubre 2026 · Seguidores y evolucion \| Meta Ads") y fecha de emision. |
+| Contenido | Seguidores, una tarjeta por marca y Conclusiones, con sus paginas. |
+| Crecimiento de seguidores | Nuevos, dejaron, netos, de pauta y organico, total y por marca; recuadro "Clave". |
+| Artes que trajeron seguidores | Hasta 3 anuncios por marca, por seguidores, con "Ver »"; recuadro "Que funciono". |
+| Seguidores de pauta · evolucion | Seguidores y costo por seguidor de la campana de Trafico al perfil en los ultimos 4 meses (misma ventana de dias) y semana a semana del mes; recuadro "Clave". |
+| Una por objetivo de cada marca | Reconocimiento, Interaccion y Trafico (y cualquier otro objetivo con gasto): 6 KPIs, resultados y costo por mes, mejores anuncios (o el desglose de interacciones si la descarga lo trae) y recuadro "Que funciona". |
+| Conclusiones y proximos pasos | Seguidores netos reales, la marca mas eficiente y la marca a reforzar; nota de como se calculan los netos. |
+| Cierre | Logo y firma de Lima Retail. |
 
-El modulo es `js/report-week.js` y es el mismo archivo en todos los tableros de marca: lo unico que cambia
-es el bloque `CONFIG` de arriba. Sus estilos y los de impresion estan al final de `css/dashboard.css`.
+- **Periodo:** se elige el mes; el en curso va del 1 al ultimo dia con datos de cualquiera de las marcas y los
+  meses anteriores se comparan en esa misma ventana (1-18 de cada mes). Un mes cerrado va completo.
+- **Seguidores nuevos y "dejaron":** vienen de Meta Business Suite y se escriben con un clic en la tabla de
+  seguidores (por marca y por mes). Netos = nuevos − dejaron; organico = netos − seguidores de pauta. Quedan
+  guardados en el navegador junto con los textos (`excambiare-report-notes-v2`); "Restablecer textos" no los borra.
+- **Seguidores de pauta y desglose de interacciones:** salen de columnas opcionales de la descarga de Meta que lee
+  el Web App (`follows`, `plays3s`, `saves`, `shares`, `comments`; ver "Columnas opcionales del barrido"). Si la
+  descarga de una marca no las trae, la lamina lo dice y en Interaccion muestra los mejores anuncios.
+- **Textos:** las lecturas "Clave", "Que funciono", "Que funciona" y las conclusiones vienen propuestas con lo que
+  dicen los numeros y se editan con un clic sobre la lamina (`**texto**` va en negrita).
+- **Descargar PDF** abre el dialogo de impresion con las laminas solas, una por hoja de 13.33 x 7.5 in (el tamaño
+  del modelo), y el nombre del archivo ya armado. Activar "Graficos de fondo" si el navegador no lo hace solo.
+
+El modulo es `js/report-week.js` y su template es propio de Excambiare: cada tablero de marca tiene el suyo,
+adaptado por la marca. Sus estilos y los de impresion estan al final de `css/dashboard.css`.
+
+### Columnas opcionales del barrido
+
+`scripts/google-sheets-sync.gs` (version de barrido 2) suma, ademas de las columnas de siempre, estas de la
+descarga de Meta si vienen (cabeceras sin tildes ni mayusculas; se acepta cualquiera de la lista):
+
+| Campo | Cabecera de la descarga |
+| --- | --- |
+| `follows` | Seguimientos de Instagram / Seguidores de Instagram |
+| `plays3s` | Reproducciones de video de 3 segundos |
+| `saves` | Publicaciones guardadas / Guardados de publicaciones |
+| `shares` | Veces que se compartieron las publicaciones / Publicaciones compartidas |
+| `comments` | Comentarios en publicaciones / Comentarios |
+
+Cada mes del barrido trae `found` con las que encontro en su archivo. Para que lleguen: agregar esas columnas al
+informe de Meta Ads antes de descargarlo, y publicar el script nuevo (Implementar > Administrar implementaciones >
+editar > Nueva version). Si Meta las nombra distinto, se agrega el nombre a `RAW_COLUMNS`.
 
 ## Calculadora de Inversion
 

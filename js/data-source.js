@@ -30,7 +30,10 @@
   const SHORT_MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
   // Columnas del barrido que usa el tablero; las demas se ignoran (un Web App sin reimplementar puede mandar de mas).
   const TEXT_FIELDS = ['day', 'campaign', 'adSet', 'ad', 'resultType', 'preview'];
-  const SUM_FIELDS = ['spend', 'impressions', 'reach', 'clicks', 'results', 'conversations'];
+  // Opcionales: solo vienen si la descarga de Meta trae esas columnas (seguidores por anuncio y desglose de
+  // interacciones). El barrido dice cuales encontro en cada archivo (month.found); sin ellas suman 0.
+  const OPTIONAL_FIELDS = ['follows', 'plays3s', 'saves', 'shares', 'comments'];
+  const SUM_FIELDS = ['spend', 'impressions', 'reach', 'clicks', 'results', 'conversations', ...OPTIONAL_FIELDS];
   const REQUIRED_COLUMNS = ['day', 'campaign', 'ad', 'spend', 'impressions', 'reach', 'results'];
   // Marcas comerciales de Inversiones Excambiare, en el orden del menu. El barrido trae una entrada por marca; todos
   // los modulos leen la marca activa (snapshot, latestMonth...), que se cambia con setBrand y se recuerda aqui.
@@ -283,6 +286,7 @@
       fileName: String(raw.fileName || ''),
       modifiedTime: String(raw.modifiedTime || ''),
       duplicates: Array.isArray(raw.duplicates) ? raw.duplicates.map(String) : [],
+      found: Array.isArray(raw.found) ? raw.found.map(String).filter(field => OPTIONAL_FIELDS.includes(field)) : [],
       error,
       outOfRange,
       rows,
@@ -869,6 +873,8 @@
     brands: () => BRANDS.map(brand => ({ ...brand })),
     brand: () => state.brandKey,
     brandLabel: () => BRANDS.find(brand => brand.key === state.brandKey)?.label || '',
+    // Datos de cualquier marca sin cambiar la activa (Generacion de Reporte lleva las tres en el mismo PDF).
+    brandSnapshot: key => state.sweep?.brands.find(brand => brand.key === key)?.data || null,
     setBrand,
     status: () => ({ error: state.error }),
     statusLabel,

@@ -24,7 +24,7 @@ const SNAPSHOT_PROPERTY = 'SNAPSHOT_FILE_ID';
 const SNAPSHOT_NAME = 'Excambiare - barrido del tablero.json';
 // Subirla al cambiar aggregateRaw_, toDay_, toNumber_, RAW_COLUMNS, OUTPUT_COLUMNS o TIMEZONE: los meses
 // guardados con otra version se vuelven a leer aunque su archivo no haya cambiado.
-const SWEEP_VERSION = 1;
+const SWEEP_VERSION = 2;
 const MANUAL_THROTTLE_MS = 60 * 1000;
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MONTH_PATTERNS = [
@@ -47,9 +47,17 @@ const RAW_COLUMNS = {
   preview: ['enlace de vista previa'],
   // Las conversaciones se suman aparte de "Resultados": una campana de interaccion o de trafico tambien las inicia.
   conversations: ['conversaciones con mensajes iniciadas'],
+  // Opcionales (Generacion de Reporte): seguidores que trajo cada anuncio y el desglose de las interacciones. Solo
+  // vienen si la descarga de Meta incluye esas columnas; el barrido avisa cuales encontro en cada archivo (found).
+  follows: ['seguimientos de instagram', 'seguidores de instagram', 'nuevos seguidores de instagram', 'seguimientos o me gusta de instagram'],
+  plays3s: ['reproducciones de video de 3 segundos', 'reproducciones de 3 segundos', 'reproducciones de video de al menos 3 segundos', 'reproducciones del video de 3 segundos'],
+  saves: ['publicaciones guardadas', 'guardados de publicaciones', 'veces que se guardo la publicacion', 'guardados'],
+  shares: ['veces que se compartieron las publicaciones', 'publicaciones compartidas', 'veces que se compartio la publicacion', 'compartidos'],
+  comments: ['comentarios en publicaciones', 'comentarios de la publicacion', 'comentarios en la publicacion', 'comentarios'],
 };
+const OPTIONAL_RAW = ['follows', 'plays3s', 'saves', 'shares', 'comments'];
 const REQUIRED_RAW = ['day', 'ad', 'spend', 'impressions', 'reach', 'results', 'campaign'];
-const SUM_FIELDS = ['spend', 'impressions', 'reach', 'clicks', 'results', 'conversations'];
+const SUM_FIELDS = ['spend', 'impressions', 'reach', 'clicks', 'results', 'conversations'].concat(OPTIONAL_RAW);
 // Filas que devuelve el Web App: una por dia x campana x conjunto x anuncio (se suman edad y sexo).
 const OUTPUT_COLUMNS = ['day', 'campaign', 'adSet', 'ad', 'resultType'].concat(SUM_FIELDS, ['preview']);
 
@@ -183,7 +191,7 @@ function readMonths_(brand, beforeBrand, sameVersion, deadline) {
     const entry = {
       name: MONTHS[period.month - 1], year: period.year, month: period.month,
       fileId: file.getId(), fileName: file.getName(), modifiedTime: file.getLastUpdated().toISOString(),
-      duplicates, columns: OUTPUT_COLUMNS, rows: [], error: null,
+      duplicates, columns: OUTPUT_COLUMNS, rows: [], found: [], error: null,
     };
     const old = before[entry.fileId];
     const unchanged = Boolean(old && old.modifiedTime === entry.modifiedTime && Array.isArray(old.rows) && Array.isArray(old.columns));
@@ -191,24 +199,30 @@ function readMonths_(brand, beforeBrand, sameVersion, deadline) {
     // Drive tarda en actualizar la fecha de edicion de un Sheet.
     if (unchanged && sameVersion && key < recentKey && JSON.stringify(old.columns) === JSON.stringify(OUTPUT_COLUMNS)) {
       entry.rows = old.rows;
+      entry.found = old.found || [];
       return entry;
     }
     if (Date.now() > deadline) {
       // Sin tiempo para leerlo en esta ejecucion: se conserva lo anterior y se lee en el proximo barrido.
-      if (unchanged) entry.rows = old.rows;
-      else entry.error = 'Pendiente: se leera en el proximo barrido (limite de tiempo de Apps Script).';
+      if (unchanged) {
+        entry.rows = old.rows;
+        entry.found = old.found || [];
+      } else entry.error = 'Pendiente: se leera en el proximo barrido (limite de tiempo de Apps Script).';
       return entry;
     }
     let opened = null;
     try {
       opened = openSpreadsheet_(file);
-      entry.rows = aggregateRaw_(rawValues_(opened.spreadsheet), opened.spreadsheet.getSpreadsheetTimeZone());
+      const read = aggregateRaw_(rawValues_(opened.spreadsheet), opened.spreadsheet.getSpreadsheetTimeZone());
+      entry.rows = read.rows;
+      entry.found = read.found;
     } catch (error) {
       if (unchanged && old.rows.length) {
         // El archivo no cambio desde el barrido anterior: un fallo pasajero de Google no borra sus filas.
         console.error(entry.fileName + ': ' + error);
         entry.columns = old.columns;
         entry.rows = old.rows;
+        entry.found = old.found || [];
       } else {
         entry.error = String((error && error.message) || error);
       }
@@ -257,6 +271,7 @@ function isColumn_(key, cell) {
 }
 
 // Suma edad y sexo. El alcance sumado es aproximado: Meta no permite sumar personas unicas entre filas.
+// Devuelve las filas y las columnas opcionales que trajo la descarga (found).
 function aggregateRaw_(values, timeZone) {
   const headers = values[0].map(cell => normalize_(cell));
   const col = {};
@@ -289,11 +304,12 @@ function aggregateRaw_(values, timeZone) {
     SUM_FIELDS.forEach(field => { group[field] += col[field] < 0 ? 0 : toNumber_(row[col[field]]); });
   });
 
-  return Object.keys(groups).sort().map(key => {
+  const rows = Object.keys(groups).sort().map(key => {
     const group = groups[key];
     group.spend = Math.round(group.spend * 100) / 100;
     return OUTPUT_COLUMNS.map(field => group[field]);
   });
+  return { rows, found: OPTIONAL_RAW.filter(key => col[key] >= 0) };
 }
 
 // Una celda de fecha llega como Date: se formatea en la zona de la hoja para no correr el dia.
