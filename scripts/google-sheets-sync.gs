@@ -24,7 +24,7 @@ const SNAPSHOT_PROPERTY = 'SNAPSHOT_FILE_ID';
 const SNAPSHOT_NAME = 'Excambiare - barrido del tablero.json';
 // Subirla al cambiar aggregateRaw_, toDay_, toNumber_, RAW_COLUMNS, OUTPUT_COLUMNS o TIMEZONE: los meses
 // guardados con otra version se vuelven a leer aunque su archivo no haya cambiado.
-const SWEEP_VERSION = 2;
+const SWEEP_VERSION = 3;
 const MANUAL_THROTTLE_MS = 60 * 1000;
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MONTH_PATTERNS = [
@@ -51,11 +51,12 @@ const RAW_COLUMNS = {
   // vienen si la descarga de Meta incluye esas columnas; el barrido avisa cuales encontro en cada archivo (found).
   follows: ['seguimientos de instagram', 'seguidores de instagram', 'nuevos seguidores de instagram', 'seguimientos o me gusta de instagram'],
   plays3s: ['reproducciones de video de 3 segundos', 'reproducciones de 3 segundos', 'reproducciones de video de al menos 3 segundos', 'reproducciones del video de 3 segundos'],
+  reactions: ['reacciones a la publicacion', 'reacciones de la publicacion', 'reacciones en la publicacion', 'reacciones a publicaciones', 'reacciones'],
   saves: ['publicaciones guardadas', 'guardados de publicaciones', 'veces que se guardo la publicacion', 'guardados'],
   shares: ['veces que se compartieron las publicaciones', 'publicaciones compartidas', 'veces que se compartio la publicacion', 'compartidos'],
   comments: ['comentarios en publicaciones', 'comentarios de la publicacion', 'comentarios en la publicacion', 'comentarios'],
 };
-const OPTIONAL_RAW = ['follows', 'plays3s', 'saves', 'shares', 'comments'];
+const OPTIONAL_RAW = ['follows', 'plays3s', 'reactions', 'saves', 'shares', 'comments'];
 const REQUIRED_RAW = ['day', 'ad', 'spend', 'impressions', 'reach', 'results', 'campaign'];
 const SUM_FIELDS = ['spend', 'impressions', 'reach', 'clicks', 'results', 'conversations'].concat(OPTIONAL_RAW);
 // Filas que devuelve el Web App: una por dia x campana x conjunto x anuncio (se suman edad y sexo).

@@ -32,7 +32,7 @@
   const TEXT_FIELDS = ['day', 'campaign', 'adSet', 'ad', 'resultType', 'preview'];
   // Opcionales: solo vienen si la descarga de Meta trae esas columnas (seguidores por anuncio y desglose de
   // interacciones). El barrido dice cuales encontro en cada archivo (month.found); sin ellas suman 0.
-  const OPTIONAL_FIELDS = ['follows', 'plays3s', 'saves', 'shares', 'comments'];
+  const OPTIONAL_FIELDS = ['follows', 'plays3s', 'reactions', 'saves', 'shares', 'comments'];
   const SUM_FIELDS = ['spend', 'impressions', 'reach', 'clicks', 'results', 'conversations', ...OPTIONAL_FIELDS];
   const REQUIRED_COLUMNS = ['day', 'campaign', 'ad', 'spend', 'impressions', 'reach', 'results'];
   // Marcas comerciales de Inversiones Excambiare, en el orden del menu. El barrido trae una entrada por marca; todos

@@ -5,7 +5,7 @@ de Inversiones Excambiare: **Sol y Tierra**, **Mex Cream** y **Gold Fusion**. Ca
 descargas y su carpeta de reportes; el tablero las muestra por separado (los resultados de una marca no se suman con
 los de otra). Montos en soles (`CURRENCY` en `js/data-source.js`).
 
-Version actual: `v2.4.0` (v1.x era el tablero anterior, sobre una hoja manual).
+Version actual: `v2.5.0` (v1.x era el tablero anterior, sobre una hoja manual).
 
 ## Versionado
 
@@ -44,7 +44,7 @@ La version vive en tres lugares: `package.json`, la etiqueta del panel lateral (
 - Archivo de Reportes: catalogo de la carpeta de reportes de la marca y validacion contra su Gasto publicitario.
   Nombres de los reportes: `SolyTierra_Octubre2026` (mensual) o `SolyTierra_1-13Oct2026` (parcial).
 - Segmentacion: publicos de Meta Ads por marca y comparativo entre marcas (ver "Segmentacion").
-  - Pestana Generacion de Reporte, dentro de Archivo de Reportes: el Reporte de Publicidad mensual de las tres marcas con el diseño del modelo de Excambiare y descarga en PDF (ver "Generacion de Reporte").
+  - Pestana Generacion de Reporte, dentro de Archivo de Reportes: el Reporte de Publicidad mensual de las tres marcas (seguidores e interaccion) con el diseño del modelo de Excambiare y descarga en PDF (ver "Generacion de Reporte").
 - Bitacora: checklist mensual de cambios, comentarios y decisiones de la cuenta.
 
 El pie del panel lateral lleva el nombre de la cuenta, el WhatsApp de Agencia Lima Retail
@@ -88,31 +88,33 @@ la carpeta de Drive de cada marca.
 ## Generacion de Reporte
 
 Pestana que arma el "Reporte de Publicidad" de las tres marcas en un solo PDF, con el diseño del modelo de
-Excambiare (`Modelo Reporte Inversiones Excambiare`): laminas 16:9 con fondo claro, tarjetas blancas de borde
-fino y acentos en azul. No sigue a la marca elegida arriba: lleva MEX (Mex Cream), Gold Fusion y Sol y Tierra
-(`ExcambiareData.brandSnapshot()`), asi que en esta pestana no aparece el selector de marca.
+Excambiare (`Modelo Reporte Inversiones Excambiare`, version "Seguidores e interaccion"): laminas 16:9 con fondo
+claro, tarjetas blancas de borde fino y acentos en azul. No sigue a la marca elegida arriba: lleva MEX (Mex Cream),
+Gold Fusion y Sol y Tierra (`ExcambiareData.brandSnapshot()`), asi que en esta pestana no aparece el selector de marca.
 
 | Pagina | Contenido |
 | --- | --- |
-| Portada | Logo de Lima Retail, "Reporte de Publicidad", cliente, periodo ("1 – 18 Octubre 2026 · Seguidores y evolucion \| Meta Ads") y fecha de emision. |
-| Contenido | Seguidores, una tarjeta por marca y Conclusiones, con sus paginas. |
-| Crecimiento de seguidores | Nuevos, dejaron, netos, de pauta y organico, total y por marca; recuadro "Clave". |
-| Artes que trajeron seguidores | Hasta 3 anuncios por marca, por seguidores, con "Ver »"; recuadro "Que funciono". |
-| Seguidores de pauta · evolucion | Seguidores y costo por seguidor de la campana de Trafico al perfil en los ultimos 4 meses (misma ventana de dias) y semana a semana del mes; recuadro "Clave". |
-| Una por objetivo de cada marca | Reconocimiento, Interaccion y Trafico (y cualquier otro objetivo con gasto): 6 KPIs, resultados y costo por mes, mejores anuncios (o el desglose de interacciones si la descarga lo trae) y recuadro "Que funciona". |
-| Conclusiones y proximos pasos | Seguidores netos reales, la marca mas eficiente y la marca a reforzar; nota de como se calculan los netos. |
+| Portada | Logo de Lima Retail, "Reporte de Publicidad", cliente y periodo ("1 – 18 Octubre 2026 · Seguidores e interaccion \| Meta Ads"). |
+| Crecimiento de seguidores | Nuevos, dejaron, netos, de pauta y organico; seguidores por marca y costo por seguidor de Trafico al perfil; recuadro "Clave". |
+| Por cada marca | Reconocimiento, Interaccion, Mejores anuncios de interaccion y Trafico (y cualquier otro objetivo con gasto). |
+| Pagina de objetivo | 6 KPIs, resultados y costo por mes (ultimos 4 meses en la misma ventana de dias), mejores anuncios o, en Interaccion, el desglose (reproducciones de 3 s, reacciones, clics, guardados, compartidos, comentarios); recuadro "Que funciona". |
+| Mejores anuncios de interaccion | Los 4 artes con mas interacciones y su desglose (reproducciones, reacciones, guardados, compartidos), con "Ver »". |
+| Conclusiones | Seguidores nuevos, el video como formato ganador y reforzar trafico al perfil; nota del periodo. |
 | Cierre | Logo y firma de Lima Retail. |
 
 - **Periodo:** se elige el mes; el en curso va del 1 al ultimo dia con datos de cualquiera de las marcas y los
   meses anteriores se comparan en esa misma ventana (1-18 de cada mes). Un mes cerrado va completo.
-- **Seguidores nuevos y "dejaron":** vienen de Meta Business Suite y se escriben con un clic en la tabla de
-  seguidores (por marca y por mes). Netos = nuevos − dejaron; organico = netos − seguidores de pauta. Quedan
-  guardados en el navegador junto con los textos (`excambiare-report-notes-v2`); "Restablecer textos" no los borra.
+- **Seguidores:** nuevos y bajas vienen de Meta Business Suite y se escriben con un clic en la tabla de seguidores
+  (por marca y por mes). De pauta = seguidores que trajo la campaña de Trafico al perfil (columna Seguimientos de
+  Instagram); netos = nuevos − bajas; organico = nuevos − pauta (sin descontar bajas); costo por seguidor =
+  inversion de Trafico al perfil ÷ seguidores de pauta. Las cifras quedan guardadas en el navegador junto con los
+  textos (`excambiare-report-notes-v2`); "Restablecer textos" no las borra.
 - **Seguidores de pauta y desglose de interacciones:** salen de columnas opcionales de la descarga de Meta que lee
-  el Web App (`follows`, `plays3s`, `saves`, `shares`, `comments`; ver "Columnas opcionales del barrido"). Si la
-  descarga de una marca no las trae, la lamina lo dice y en Interaccion muestra los mejores anuncios.
-- **Textos:** las lecturas "Clave", "Que funciono", "Que funciona" y las conclusiones vienen propuestas con lo que
-  dicen los numeros y se editan con un clic sobre la lamina (`**texto**` va en negrita).
+  el Web App (`follows`, `plays3s`, `reactions`, `saves`, `shares`, `comments`; ver "Columnas opcionales del
+  barrido"). Si la descarga de una marca no las trae, la lamina lo dice: en Interaccion muestra los mejores
+  anuncios y en Mejores anuncios de interaccion, solo el total de cada arte.
+- **Textos:** "Clave", "Que funciona" y las conclusiones vienen propuestos con lo que dicen los numeros y se editan
+  con un clic sobre la lamina (`**texto**` va en negrita).
 - **Descargar PDF** abre el dialogo de impresion con las laminas solas, una por hoja de 13.33 x 7.5 in (el tamaño
   del modelo), y el nombre del archivo ya armado. Activar "Graficos de fondo" si el navegador no lo hace solo.
 
@@ -121,13 +123,14 @@ adaptado por la marca. Sus estilos y los de impresion estan al final de `css/das
 
 ### Columnas opcionales del barrido
 
-`scripts/google-sheets-sync.gs` (version de barrido 2) suma, ademas de las columnas de siempre, estas de la
+`scripts/google-sheets-sync.gs` (version de barrido 3) suma, ademas de las columnas de siempre, estas de la
 descarga de Meta si vienen (cabeceras sin tildes ni mayusculas; se acepta cualquiera de la lista):
 
 | Campo | Cabecera de la descarga |
 | --- | --- |
 | `follows` | Seguimientos de Instagram / Seguidores de Instagram |
 | `plays3s` | Reproducciones de video de 3 segundos |
+| `reactions` | Reacciones a la publicacion / Reacciones |
 | `saves` | Publicaciones guardadas / Guardados de publicaciones |
 | `shares` | Veces que se compartieron las publicaciones / Publicaciones compartidas |
 | `comments` | Comentarios en publicaciones / Comentarios |

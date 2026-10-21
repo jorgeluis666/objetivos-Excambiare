@@ -4073,8 +4073,13 @@ button.topbar-pill[aria-expanded="true"] .status-chevron {
   flex: none;
 }
 
-.rp-arts td:first-child {
-  color: var(--rp-text);
+/* Mejores anuncios de interaccion: solo el arte que lidera va en negrita. */
+.rp-interaction-ads .rp-name {
+  font-weight: 400;
+}
+
+.rp-interaction-ads tr.rp-top .rp-name {
+  font-weight: 600;
 }
 
 @media print {
