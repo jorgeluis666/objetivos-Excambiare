@@ -57,13 +57,23 @@ function encryptPage(html, password) {
 
 const DATA_ENDPOINT_RE =/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]{20,}\/exec$/;
 const SNAPSHOT_FILE = path.join(ROOT, 'data', 'excambiare-meta.json');
-const RETRY_DELAY_MS = 15000;
+// Esperas entre intentos cuando Google no entrega el barrido. A veces responde 404 al primer intento y el
+// siguiente sale bien: el 404 no lo da el script (sus errores llegan como JSON con ok:false) sino el paso
+// en que Google entrega la respuesta guardada del Web App.
+const RETRY_DELAYS_MS = [15000, 30000, 60000];
 
 // Baja el ultimo barrido del Web App y lo guarda en data/. Devuelve null (con aviso) si Google falla.
 async function fetchSnapshot(endpoint) {
   try {
     const response = await fetch(`${endpoint}?action=data`, { signal: AbortSignal.timeout(120000) });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) {
+      // Para saber que contesto Google: el servidor (sin la direccion completa, que es privada) y el texto
+      // de su pagina de error, que no trae datos del cliente.
+      const host = (() => { try { return new URL(response.url).host; } catch (error) { return '?'; } })();
+      const page = (await response.text().catch(() => '')).replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+      throw new Error(`HTTP ${response.status} desde ${host}${page ? `: "${page}"` : ''}`);
+    }
     const payload = await response.json();
     if (!payload || payload.ok === false || !Array.isArray(payload.brands)) throw new Error('respuesta sin marcas');
     const text = JSON.stringify(payload);
@@ -87,12 +97,18 @@ async function loadSnapshot(endpoint) {
     return fs.readFileSync(SNAPSHOT_FILE, 'utf8');
   }
   // En GitHub Actions nunca hay copia local: un tablero sin copia reemplazaria al publicado, que si la tiene.
-  // Se reintenta una vez y, si Google sigue sin responder, el build falla y Pages conserva el deploy anterior.
+  // Se reintenta hasta tres veces (15 s, 30 s y 60 s) y, si Google sigue sin responder, el build falla y
+  // Pages conserva el deploy anterior.
   if (process.env.GITHUB_ACTIONS === 'true') {
     if (endpoint) {
-      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
-      const retry = await fetchSnapshot(endpoint);
-      if (retry) return retry;
+      for (const [index, delay] of RETRY_DELAYS_MS.entries()) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+        const retry = await fetchSnapshot(endpoint);
+        if (retry) {
+          console.log(`[build] barrido del Web App bajado en el reintento ${index + 1}`);
+          return retry;
+        }
+      }
     }
     throw new Error('sin barrido del Web App ni copia local de data/; no se publica un tablero sin datos');
   }
