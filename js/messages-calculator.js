@@ -129,7 +129,7 @@
     if (!messages?.costPerConversation) return null;
     return {
       value: messages.costPerConversation,
-      label: `${messages.label}: costo por conversacion`,
+      label: `${messages.label}: costo por conversación`,
       monthLabel: `${month.name} ${month.year}`,
     };
   }

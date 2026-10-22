@@ -11,7 +11,7 @@
       title: 'Gasto publicitario 2026',
       caption: 'Agencia Lima Retail',
       source: 'Fuente: Meta Ads / descargas mensuales en Google Drive',
-      footer: 'Barrido automatico todos los dias a las 10:00',
+      footer: 'Barrido automático todos los días a las 10:00',
     },
     'view-ads': {
       title: 'Anuncios',
@@ -26,13 +26,13 @@
       footer: 'Proyección lineal según el ritmo del mes',
     },
     'view-calculator': {
-      title: 'Calculadora de Inversión',
+      title: 'Calculadora de inversión',
       caption: 'Objetivo comercial e inversión por CPL',
       source: 'Fuente: valores ingresados / CPL real de Meta Ads',
       footer: 'Los valores se guardan en este navegador',
     },
     'view-history': {
-      title: 'Histórico de Campañas',
+      title: 'Histórico de campañas',
       caption: 'Campañas activas y finalizadas',
       source: 'Fuente: Meta Ads / todos los meses con descarga',
       footer: 'Todas las campañas de las descargas de Drive',
@@ -41,7 +41,7 @@
       title: 'Archivo de Reportes',
       caption: 'Documentos en Google Drive',
       source: 'Fuente: Carpeta de reportes de la marca / Google Drive',
-      footer: 'Validado contra las descargas de Meta del modulo Gasto publicitario',
+      footer: 'Validado contra las descargas de Meta del módulo Gasto publicitario',
     },
     'view-segments': {
       title: 'Segmentación',

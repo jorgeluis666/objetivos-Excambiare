@@ -5,7 +5,7 @@ de Inversiones Excambiare: **Sol y Tierra**, **Mex Cream** y **Gold Fusion**. Ca
 descargas y su carpeta de reportes; el tablero las muestra por separado (los resultados de una marca no se suman con
 los de otra). Montos en soles (`CURRENCY` en `js/data-source.js`).
 
-Version actual: `v2.6.0` (v1.x era el tablero anterior, sobre una hoja manual).
+Version actual: `v2.6.1` (v1.x era el tablero anterior, sobre una hoja manual).
 
 ## Versionado
 

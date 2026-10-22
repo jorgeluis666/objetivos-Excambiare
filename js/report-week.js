@@ -63,14 +63,20 @@
   const esc = value => api().esc(value);
   const finite = value => value != null && value !== '' && Number.isFinite(Number(value));
 
-  // ── Formatos del modelo ("S/ 192", "S/ 0.0096", "19,998", "+89", "S/0.006") ──
+  // ── Formatos ("S/. 192", "S/. 0.0096", "19,998", "+89", "−12"): la moneda y los miles como en el resto del tablero ──
   const integer = new Intl.NumberFormat('es-PE', { maximumFractionDigits: 0 });
+  // Montos con separador de miles es-PE y decimales fijos (un Intl.NumberFormat por cantidad de decimales).
+  const decimalFormats = new Map();
+  const decimals = (value, digits) => {
+    if (!decimalFormats.has(digits)) decimalFormats.set(digits, new Intl.NumberFormat('es-PE', { minimumFractionDigits: digits, maximumFractionDigits: digits }));
+    return decimalFormats.get(digits).format(Number(value));
+  };
   const num = value => (finite(value) ? integer.format(Math.round(value)) : '—');
-  const signed = value => (finite(value) ? `${value > 0 ? '+' : value < 0 ? '-' : ''}${integer.format(Math.abs(Math.round(value)))}` : '—');
-  const money = value => (finite(value) ? `S/ ${integer.format(Math.round(value))}` : '—');
-  const money2 = value => (finite(value) ? `S/ ${Number(value).toFixed(2)}` : '—');
-  const cost = value => (finite(value) && value > 0 ? `S/ ${Number(value).toFixed(value < 1 ? 4 : 2)}` : '—');
-  const costShort = value => (finite(value) && value > 0 ? `S/${Number(value).toFixed(value < 1 ? 3 : 2)}` : '—');
+  const signed = value => (finite(value) ? `${value > 0 ? '+' : value < 0 ? '−' : ''}${integer.format(Math.abs(Math.round(value)))}` : '—');
+  const money = value => (finite(value) ? `S/. ${integer.format(Math.round(value))}` : '—');
+  const money2 = value => (finite(value) ? `S/. ${decimals(value, 2)}` : '—');
+  const cost = value => (finite(value) && value > 0 ? `S/. ${decimals(value, value < 1 ? 4 : 2)}` : '—');
+  const costShort = value => (finite(value) && value > 0 ? `S/. ${decimals(value, value < 1 ? 3 : 2)}` : '—');
   const compact = value => (value >= 1000 ? `${(value / 1000).toFixed(1)}k` : integer.format(Math.round(value)));
   const share = (part, total) => (total > 0 ? `${((part / total) * 100).toFixed(1)}%` : '—');
   const pageNumber = value => String(value).padStart(2, '0');
@@ -661,7 +667,7 @@
     const select = document.getElementById('week-select');
     if (!available.length) {
       if (select) select.innerHTML = '<option value="">Sin meses con datos</option>';
-      host.innerHTML = '<div class="panel"><div class="empty-state"><strong>Todavia no hay datos para el reporte</strong><span>El reporte se arma con las descargas de Meta Ads de las tres marcas. En cuanto haya un mes con entregas, aparece aqui.</span></div></div>';
+      host.innerHTML = '<div class="panel"><div class="empty-state"><strong>Todavía no hay datos para el reporte</strong><span>El reporte se arma con las descargas de Meta Ads de las tres marcas. En cuanto haya un mes con entregas, aparece aquí.</span></div></div>';
       return;
     }
     if (!available.some(period => period.key === selectedMonth)) selectedMonth = available[0].key;
