@@ -5,7 +5,7 @@ de Inversiones Excambiare: **Sol y Tierra**, **Mex Cream** y **Gold Fusion**. Ca
 descargas y su carpeta de reportes; el tablero las muestra por separado (los resultados de una marca no se suman con
 los de otra). Montos en soles (`CURRENCY` en `js/data-source.js`).
 
-Version actual: `v2.6.1` (v1.x era el tablero anterior, sobre una hoja manual).
+Version actual: `v2.7.0` (v1.x era el tablero anterior, sobre una hoja manual).
 
 ## Versionado
 
@@ -80,6 +80,14 @@ la carpeta de Drive de cada marca.
   **Actualizar** hace un barrido en el momento. Un mes cerrado que no cambio se reutiliza sin abrir el archivo; si el
   primer barrido no alcanza a convertir todos los `.xlsx` antes del limite de Apps Script, el resto queda
   "Pendiente" y se lee en el barrido siguiente.
+- Barra superior (como Royal Baby): queda fija al hacer scroll y su bajada repite la descripcion del modulo en el
+  panel lateral. A la derecha, la pildora de sincronizacion dice "Sincronizado · hace 2 h" en verde; en ambar dice
+  "Copia guardada · hace N h", "Aun no sincronizado" o lleva mas de un dia y medio sin barrido,
+  o la carpeta de la marca elegida no se pudo leer;
+  en rojo, "Sin conexion con Google"; y en ambar con el punto latiendo, "Recargando…" mientras corre Actualizar. Su
+  title trae la linea completa (datos al dia N, origen y hora del barrido) y al pulsarla abre el detalle (datos
+  cargados, ultimo barrido, proximo automatico, archivo del mes y fuente). Al lado esta el boton fantasma
+  **Actualizar**, con icono de recarga que gira mientras dura el barrido.
 - El repo es publico, asi que ni la URL del Web App, ni los IDs de las carpetas, ni los datos de las marcas se
   guardan en el: `npm run build` toma la URL del secret `DATA_ENDPOINT`, baja el ultimo barrido y lo incrusta en
   `dist/index.html` (que solo se sirve cifrado). La copia queda tambien en `data/excambiare-meta.json`, que esta en

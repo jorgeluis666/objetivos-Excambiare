@@ -6,10 +6,13 @@
   const BRAND_VIEWS = ['view-obj', 'view-ads', 'view-messages', 'view-history', 'view-reports'];
   const SWITCH_VIEWS = ['view-ads', 'view-messages', 'view-history', 'view-reports'];
   let currentView = 'view-obj';
+  // La bajada (caption) de la barra superior repite la descripcion del modulo en el panel lateral, como Royal Baby.
+  // Excepcion: en Gasto publicitario el menu pone la marca de titulo y "Gasto publicitario" debajo, que la barra ya
+  // dice en su titulo; la bajada dice que mide, como en los otros tableros de la familia.
   const VIEW_META = {
     'view-obj': {
       title: 'Gasto publicitario 2026',
-      caption: 'Agencia Lima Retail',
+      caption: 'Meta Ads por objetivo',
       source: 'Fuente: Meta Ads / descargas mensuales en Google Drive',
       footer: 'Barrido automático todos los días a las 10:00',
     },
@@ -27,38 +30,38 @@
     },
     'view-calculator': {
       title: 'Calculadora de inversión',
-      caption: 'Objetivo comercial e inversión por CPL',
+      caption: 'Inversión por CPL',
       source: 'Fuente: valores ingresados / CPL real de Meta Ads',
       footer: 'Los valores se guardan en este navegador',
     },
     'view-history': {
       title: 'Histórico de campañas',
-      caption: 'Campañas activas y finalizadas',
+      caption: 'Activas y finalizadas',
       source: 'Fuente: Meta Ads / todos los meses con descarga',
       footer: 'Todas las campañas de las descargas de Drive',
     },
     'view-reports': {
       title: 'Archivo de Reportes',
-      caption: 'Documentos en Google Drive',
+      caption: 'Documentos y reporte mensual',
       source: 'Fuente: Carpeta de reportes de la marca / Google Drive',
       footer: 'Validado contra las descargas de Meta del módulo Gasto publicitario',
     },
     'view-segments': {
       title: 'Segmentación',
-      caption: 'Públicos de Meta Ads por marca',
+      caption: 'Públicos por marca',
       source: 'Fuente: documento Segmentaciones Excambiare',
       footer: 'Se actualiza al cambiar el documento fuente',
     },
     'view-week': {
       parent: 'view-reports',   // va dentro de Archivo de Reportes, con su pestaña
       title: 'Archivo de Reportes',
-      caption: 'Generación de Reporte · Reporte de Publicidad de las tres marcas',
+      caption: 'Documentos y reporte mensual',
       source: 'Fuente: descargas de Meta Ads de las tres marcas',
       footer: 'El mes elegido, listo para descargar en PDF',
     },
     'view-log': {
       title: 'Bitácora',
-      caption: 'Checklist de cambios, comentarios y decisiones',
+      caption: 'Cambios, comentarios y decisiones',
       source: 'Fuente: Bitácora del equipo de Agencia Lima Retail',
       footer: 'Las ediciones quedan como borrador hasta exportar y publicar el archivo',
     },
