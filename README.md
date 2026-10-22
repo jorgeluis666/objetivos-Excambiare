@@ -5,7 +5,7 @@ de Inversiones Excambiare: **Sol y Tierra**, **Mex Cream** y **Gold Fusion**. Ca
 descargas y su carpeta de reportes; el tablero las muestra por separado (los resultados de una marca no se suman con
 los de otra). Montos en soles (`CURRENCY` en `js/data-source.js`).
 
-Version actual: `v2.5.0` (v1.x era el tablero anterior, sobre una hoja manual).
+Version actual: `v2.6.0` (v1.x era el tablero anterior, sobre una hoja manual).
 
 ## Versionado
 
@@ -35,6 +35,13 @@ La version vive en tres lugares: `package.json`, la etiqueta del panel lateral (
     del mes anterior (un mes cerrado se compara completo). En la vista Anual, promedio mensual de los meses cerrados.
   - Distribucion de la inversion por campana y un cuadro por objetivo (Interaccion, Reconocimiento, Trafico al
     perfil, Conversaciones IG...) con sus KPIs, su grafico, sus conjuntos de anuncios y sus anuncios.
+  - Grafico de cada cuadro: `Por dia` o `Por mes` (sin acumulado del mes: siempre sube y exagera el crecimiento)
+    e indicadores resultado, inversion, impresiones, alcance y costo por resultado (inversion / resultados de cada
+    dia o mes; un dia sin resultados queda como hueco). Cada punto lleva su valor (si dos etiquetas chocan, una baja
+    bajo el punto o queda solo en el tooltip). Varios indicadores van en paneles apilados, cada uno con su escala, o
+    con el boton `Un solo cuadro` todos juntos, un color por indicador y cada uno con su escala (sin eje: el valor
+    va en el punto); uno solo va contra el mes anterior en el mismo dia. Indicadores, vista y un solo cuadro se
+    recuerdan por objetivo.
 - Anuncios: el mejor anuncio de cada objetivo (mas resultados y, a igual cantidad, menor costo por resultado) y la
   tabla de todos los anuncios del periodo con filtro por objetivo, densidad compacta y pantalla completa.
 - Proyecciones: cierre de mes estimado por objetivo (resultados y gasto). Si el ultimo mes con datos ya termino,
