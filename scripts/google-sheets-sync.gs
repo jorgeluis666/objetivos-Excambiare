@@ -66,12 +66,44 @@ function doGet(event) {
   try {
     const params = (event && event.parameter) || {};
     if (params.action !== 'data') throw new Error('Accion no soportada.');
-    const snapshot = params.fresh === '1' ? sweep_('manual') : (readSnapshot_() || sweep_('inicial'));
+    let snapshot = params.fresh === '1' ? sweep_('manual') : readSnapshot_();
+    if (!snapshot) snapshot = sweep_('inicial');
+    // Una hoja subida o corregida despues del ultimo barrido se lee al abrir el tablero, sin esperar al
+    // disparador de las 10:00 ni al boton Actualizar.
+    else if (params.fresh !== '1' && changedSafely_(snapshot)) snapshot = sweep_('archivo nuevo');
     return json_(Object.assign({ ok: true }, snapshot));
   } catch (error) {
     console.error(error);
     return json_({ ok: false, error: 'No se pudo leer la carpeta de datos.' });
   }
+}
+
+// Si no se puede revisar la carpeta se sirve el barrido guardado (es lo que habia antes de esta revision).
+function changedSafely_(snapshot) {
+  try {
+    return folderChangedSince_(snapshot);
+  } catch (error) {
+    console.error(error);
+    return false;
+  }
+}
+
+// Las tres marcas tienen su propia carpeta: basta con que cambie una para rehacer el barrido.
+function folderChangedSince_(snapshot) {
+  const sweptAt = Date.parse(snapshot.sweptAt) || 0;
+  const present = {};
+  let changed = false;
+  BRANDS.forEach(brand => {
+    const files = DriveApp.getFolderById(folderId_(brand.data)).getFiles();
+    while (files.hasNext()) {
+      const file = files.next();
+      if (file.isTrashed()) continue;
+      present[file.getId()] = true;
+      if (file.getLastUpdated().getTime() > sweptAt) changed = true;
+    }
+  });
+  const months = (snapshot.brands || []).reduce((acc, brand) => acc.concat(brand.months || []), []);
+  return changed || months.some(month => month.fileId && !present[month.fileId]);
 }
 
 // Disparador diario.
