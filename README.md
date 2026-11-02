@@ -5,7 +5,7 @@ de Inversiones Excambiare: **Sol y Tierra**, **Mex Cream** y **Gold Fusion**. Ca
 descargas y su carpeta de reportes; el tablero las muestra por separado (los resultados de una marca no se suman con
 los de otra). Montos en soles (`CURRENCY` en `js/data-source.js`).
 
-Version actual: `v2.7.0` (v1.x era el tablero anterior, sobre una hoja manual).
+Version actual: `v2.8.0` (v1.x era el tablero anterior, sobre una hoja manual).
 
 ## Versionado
 
@@ -51,7 +51,7 @@ La version vive en tres lugares: `package.json`, la etiqueta del panel lateral (
 - Archivo de Reportes: catalogo de la carpeta de reportes de la marca y validacion contra su Gasto publicitario.
   Nombres de los reportes: `SolyTierra_Octubre2026` (mensual) o `SolyTierra_1-13Oct2026` (parcial).
 - Segmentacion: publicos de Meta Ads por marca y comparativo entre marcas (ver "Segmentacion").
-  - Pestana Generacion de Reporte, dentro de Archivo de Reportes: el Reporte de Publicidad mensual de las tres marcas (seguidores e interaccion) con el diseño del modelo de Excambiare y descarga en PDF (ver "Generacion de Reporte").
+  - Pestana Generacion de Reporte, dentro de Archivo de Reportes: el Reporte de Publicidad mensual de las tres marcas (evolucion, causas, artes, seguidores y proximos pasos) con el diseño del modelo de Excambiare y descarga en PDF (ver "Generacion de Reporte").
 - Bitacora: checklist mensual de cambios, comentarios y decisiones de la cuenta.
 
 El pie del panel lateral lleva el nombre de la cuenta, el WhatsApp de Agencia Lima Retail
@@ -103,33 +103,48 @@ la carpeta de Drive de cada marca.
 ## Generacion de Reporte
 
 Pestana que arma el "Reporte de Publicidad" de las tres marcas en un solo PDF, con el diseño del modelo de
-Excambiare (`Modelo Reporte Inversiones Excambiare`, version "Seguidores e interaccion"): laminas 16:9 con fondo
-claro, tarjetas blancas de borde fino y acentos en azul. No sigue a la marca elegida arriba: lleva MEX (Mex Cream),
-Gold Fusion y Sol y Tierra (`ExcambiareData.brandSnapshot()`), asi que en esta pestana no aparece el selector de marca.
+Excambiare (`Modelo Reporte Inversiones Excambiare`): laminas 16:9 con fondo claro, tarjetas blancas de borde fino
+y acentos en azul. No sigue a la marca elegida arriba: lleva MEX (Mex Cream), Gold Fusion y Sol y Tierra
+(`ExcambiareData.brandSnapshot()`), asi que en esta pestana no aparece el selector de marca.
 
 | Pagina | Contenido |
 | --- | --- |
-| Portada | Logo de Lima Retail, "Reporte de Publicidad", cliente y periodo ("1 – 18 Octubre 2026 · Seguidores e interaccion \| Meta Ads"). |
-| Crecimiento de seguidores | Nuevos, dejaron, netos, de pauta y organico; seguidores por marca y costo por seguidor de Trafico al perfil; recuadro "Clave". |
-| Por cada marca | Reconocimiento, Interaccion, Mejores anuncios de interaccion y Trafico (y cualquier otro objetivo con gasto). |
-| Pagina de objetivo | 6 KPIs, resultados y costo por mes (ultimos 4 meses en la misma ventana de dias), mejores anuncios o, en Interaccion, el desglose (reproducciones de 3 s, reacciones, clics, guardados, compartidos, comentarios); recuadro "Que funciona". |
-| Mejores anuncios de interaccion | Los 4 artes con mas interacciones y su desglose (reproducciones, reacciones, guardados, compartidos), con "Ver »". |
-| Conclusiones | Seguidores nuevos, el video como formato ganador y reforzar trafico al perfil; nota del periodo. |
+| Portada | Logo de Lima Retail, "Reporte de Publicidad", cliente, marcas y periodo. |
+| Resumen ejecutivo | Inversion total, alcance, seguidores de pauta y costo por seguidor con su variacion; tabla marca x objetivo (inversion, resultados y costo por resultado con su variacion y la lectura: mejoro o empeoro, por los artes o por el CPM); "Lectura del mes". |
+| Crecimiento de seguidores | Nuevos, bajas, netos, de pauta y costo por seguidor con su variacion; tabla por marca (nuevos, bajas, netos, de pauta, organico, inversion de trafico, costo por seguidor); "Clave". |
+| Evolucion de seguidores | Seguidores de pauta y costo por seguidor por mes y por marca (ultimos 4 meses), tabla mes a mes y "Evolucion" (que movio el costo: mas o menos seguidores o mas o menos inversion). |
+| Por marca y objetivo: evolucion | 6 KPIs con su variacion contra el mes anterior con datos (inversion, resultados, costo por resultado, CPM, alcance y resultados por mil impresiones); grafico de inversion, resultados y costo por mes con el valor en cada punto (un mes sin datos queda marcado); tabla mes a mes con la comparacion contra el promedio de los meses anteriores; "Por que cambio". |
+| Por marca y objetivo: artes | Hasta 6 artes con miniatura (o el icono de su formato), formato, nuevo, inversion, resultados, costo, comparacion contra el promedio y veredicto (Replicar, Mantener, Ajustar, Renovar, Descartar, Poca data); en Interaccion, el desglose de cada arte; en Trafico, los seguidores de cada arte; resultado por formato y "Que funciona". |
+| Conclusiones | Seguidores, artes para replicar (y el formato que domina) y que movio los costos; nota del periodo. |
+| Que replicar, que descartar y proximos pasos | Una columna por marca con los artes a replicar, los que hay que descartar o ajustar y lo que toca el mes siguiente. |
 | Cierre | Logo y firma de Lima Retail. |
 
 - **Periodo:** se elige el mes; el en curso va del 1 al ultimo dia con datos de cualquiera de las marcas y los
-  meses anteriores se comparan en esa misma ventana (1-18 de cada mes). Un mes cerrado va completo.
-- **Seguidores:** nuevos y bajas vienen de Meta Business Suite y se escriben con un clic en la tabla de seguidores
-  (por marca y por mes). De pauta = seguidores que trajo la campaña de Trafico al perfil (columna Seguimientos de
-  Instagram); netos = nuevos − bajas; organico = nuevos − pauta (sin descontar bajas); costo por seguidor =
-  inversion de Trafico al perfil ÷ seguidores de pauta. Las cifras quedan guardadas en el navegador junto con los
-  textos (`excambiare-report-notes-v2`); "Restablecer textos" no las borra.
-- **Seguidores de pauta y desglose de interacciones:** salen de columnas opcionales de la descarga de Meta que lee
-  el Web App (`follows`, `plays3s`, `reactions`, `saves`, `shares`, `comments`; ver "Columnas opcionales del
-  barrido"). Si la descarga de una marca no las trae, la lamina lo dice: en Interaccion muestra los mejores
-  anuncios y en Mejores anuncios de interaccion, solo el total de cada arte.
-- **Textos:** "Clave", "Que funciona" y las conclusiones vienen propuestos con lo que dicen los numeros y se editan
-  con un clic sobre la lamina (`**texto**` va en negrita).
+  meses anteriores se comparan en esa misma ventana (1-18 de cada mes). Un mes cerrado va completo. La evolucion son
+  los ultimos 4 meses; la variacion es contra el mes anterior con datos de cada objetivo (si falta un mes, se dice
+  contra cual se compara).
+- **Por que cambio el costo:** costo por resultado = CPM ÷ resultados por mil impresiones. Si el que mas se movio es
+  el CPM, la causa es la subasta o el publico; si son los resultados por mil impresiones, la causa son los artes.
+  Ademas compara inversion contra resultados y el costo contra el promedio de los meses anteriores.
+- **Veredicto de cada arte:** su costo por resultado contra el del objetivo en el mes. Replicar = 20% o mas barato;
+  Ajustar = 15% o mas caro; Descartar = 50% o mas caro con al menos el 5% de la inversion (o sin resultados);
+  Renovar = ya corria el mes anterior y su costo subio 40% o mas; Poca data = menos de S/ 3 o 500 impresiones.
+  Nuevo = no corrio el mes inmediato anterior. Umbrales en `VERDICT` de `js/report-week.js`.
+- **Formato:** con token de Meta en el Web App (ver "Meta en el Web App") llega el exacto (reel, video, carrusel o
+  imagen) y la miniatura. Sin el, se deduce de las reproducciones de 3 s: Video o Estatico.
+- **Seguidores:** de pauta = seguidores que trajeron los anuncios de todas las campañas (columna Seguimientos de
+  Instagram); costo por seguidor = inversion de Trafico al perfil ÷ seguidores de pauta; netos = nuevos − bajas;
+  organico = nuevos − pauta (sin descontar bajas). Nuevos y bajas llegan de Instagram si el Web App esta conectado; si
+  no, se escriben con un clic en la tabla de seguidores (por marca y por mes) y lo escrito gana sobre Instagram. Las
+  cifras quedan guardadas en el navegador junto con los textos (`excambiare-report-notes-v2`); "Restablecer textos"
+  no las borra.
+- **Antes de descargar el PDF:** un recuadro (que no sale en el PDF) avisa lo que falta o esta mal en los datos: un
+  mes sin descarga en la carpeta, una descarga que no se pudo leer o que no llega al ultimo dia del mes, una descarga
+  sin la columna de seguidores, el mismo anuncio (mismo ID de Meta) en las descargas de dos marcas (una trae filas de
+  la otra), y si faltan los nuevos y bajas o el token de Meta.
+- **Textos:** "Lectura del mes", "Clave", "Evolucion", "Por que cambio", "Que funciona", las conclusiones y los
+  proximos pasos vienen propuestos con lo que dicen los numeros y se editan con un clic sobre la lamina (`**texto**`
+  va en negrita).
 - **Descargar PDF** abre el dialogo de impresion con las laminas solas, una por hoja de 13.33 x 7.5 in (el tamaño
   del modelo), y el nombre del archivo ya armado. Activar "Graficos de fondo" si el navegador no lo hace solo.
 
@@ -153,6 +168,21 @@ descarga de Meta si vienen (cabeceras sin tildes ni mayusculas; se acepta cualqu
 Cada mes del barrido trae `found` con las que encontro en su archivo. Para que lleguen: agregar esas columnas al
 informe de Meta Ads antes de descargarlo, y publicar el script nuevo (Implementar > Administrar implementaciones >
 editar > Nueva version). Si Meta las nombra distinto, se agrega el nombre a `RAW_COLUMNS`.
+
+### Meta en el Web App (opcional)
+
+Con la propiedad del script `META_TOKEN` el barrido suma a cada marca, para los anuncios de los ultimos 4 meses, la
+miniatura, el formato y el enlace de cada arte (`creatives`, por el ID del anuncio que trae el enlace de vista previa)
+y, con `IG_USER_SOL_Y_TIERRA`, `IG_USER_MEX_CREAM` e `IG_USER_GOLD_FUSION` (ID de la cuenta profesional de
+Instagram de cada marca), los seguidores nuevos y las bajas de cada mes (`instagram`, metrica
+`follows_and_unfollows`) y el total de seguidores al ultimo barrido. Las miniaturas de Meta vencen a los pocos dias:
+cada barrido diario las vuelve a pedir. Un error de Meta deja lo del barrido anterior y se avisa en `metaError`.
+
+- Token: de un usuario del sistema del Business Manager de Lima Retail con acceso a las tres cuentas publicitarias y
+  a las tres cuentas de Instagram, con los permisos `ads_read`, `instagram_basic`, `instagram_manage_insights` y
+  `pages_read_engagement`. Nunca va en el repo.
+- Despues de poner las propiedades, ejecutar `probarMeta()` en el editor: muestra cuantos artes trajo con miniatura
+  y los seguidores de cada mes, sin guardar nada.
 
 ## Calculadora de Inversion
 
@@ -200,6 +230,7 @@ esa cuenta pierde el acceso, el barrido se detiene.
 | Que | Donde |
 | --- | --- |
 | Carpetas de descargas de Meta y de reportes | Propiedades del script `DATA_FOLDER_<MARCA>` y `REPORTS_FOLDER_<MARCA>` |
+| Token de Meta y cuentas de Instagram (opcional) | Propiedades del script `META_TOKEN` e `IG_USER_<MARCA>` |
 | URL del Web App | secret de GitHub `DATA_ENDPOINT` |
 | Clave de acceso al tablero | secret de GitHub `DASHBOARD_PASSWORD` |
 | Logo y favicon | `assets/logo-excambiare.png`, `assets/favicon.png` |

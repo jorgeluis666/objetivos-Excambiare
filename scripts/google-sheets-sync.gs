@@ -8,11 +8,22 @@
 // que el proyecto necesita el servicio avanzado "Drive API" (Servicios > +). Nombre: "Octubre 2026" o
 // "Sol y Tierra - Octubre 2026"; sin ano se asume el ano en curso.
 // GET ?action=data -> ultimo barrido | ?action=data&fresh=1 -> barrido en el momento (boton Actualizar).
+// Opcional (Generacion de Reporte): con un token de Meta en la propiedad META_TOKEN el barrido suma a cada marca la
+// miniatura y el formato de sus artes (creatives) y, con IG_USER_<MARCA>, los seguidores nuevos y las bajas de su
+// Instagram por mes (instagram). Sin token todo sigue igual: el reporte deduce el formato de las reproducciones y las
+// cifras de seguidores se escriben sobre la lamina.
 const BRANDS = [
-  { key: 'sol-y-tierra', label: 'Sol y Tierra', data: 'DATA_FOLDER_SOL_Y_TIERRA', reports: 'REPORTS_FOLDER_SOL_Y_TIERRA' },
-  { key: 'mex-cream', label: 'Mex Cream', data: 'DATA_FOLDER_MEX_CREAM', reports: 'REPORTS_FOLDER_MEX_CREAM' },
-  { key: 'gold-fusion', label: 'Gold Fusion', data: 'DATA_FOLDER_GOLD_FUSION', reports: 'REPORTS_FOLDER_GOLD_FUSION' },
+  { key: 'sol-y-tierra', label: 'Sol y Tierra', data: 'DATA_FOLDER_SOL_Y_TIERRA', reports: 'REPORTS_FOLDER_SOL_Y_TIERRA', instagram: 'IG_USER_SOL_Y_TIERRA' },
+  { key: 'mex-cream', label: 'Mex Cream', data: 'DATA_FOLDER_MEX_CREAM', reports: 'REPORTS_FOLDER_MEX_CREAM', instagram: 'IG_USER_MEX_CREAM' },
+  { key: 'gold-fusion', label: 'Gold Fusion', data: 'DATA_FOLDER_GOLD_FUSION', reports: 'REPORTS_FOLDER_GOLD_FUSION', instagram: 'IG_USER_GOLD_FUSION' },
 ];
+const META_API = 'https://graph.facebook.com/v21.0';
+// Meses con miniaturas y seguidores: los de la evolucion del reporte (el en curso y los tres anteriores). Las URLs de
+// las miniaturas de Meta vencen a los pocos dias: cada barrido diario las vuelve a pedir.
+const META_MONTHS = 4;
+const META_BATCH = 50;
+// Instagram no da los seguidores de mas de 30 dias en una sola consulta: cada mes se pide en tramos.
+const INSIGHTS_DAYS = 15;
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 // Apps Script corta una ejecucion a los 6 minutos. Convertir y leer las 21 descargas iniciales puede acercarse: lo
 // que no alcance queda para el barrido siguiente, que reutiliza lo ya leido.
@@ -133,7 +144,36 @@ function logSnapshot_(snapshot) {
   });
 }
 
+// Prueba de la conexion con Meta desde el editor (despues de poner META_TOKEN e IG_USER_<MARCA>): no guarda nada.
+function probarMeta() {
+  if (!metaToken_()) {
+    console.log('Falta la propiedad del script META_TOKEN: sin ella el barrido no pide miniaturas ni seguidores a Meta.');
+    return;
+  }
+  const previous = readSnapshot_();
+  BRANDS.forEach(brand => {
+    const before = ((previous && previous.brands) || []).find(item => item.key === brand.key) || {};
+    console.log('== ' + brand.label);
+    try {
+      const creatives = readCreatives_(before.months || [], null);
+      const ids = Object.keys(creatives);
+      const withThumb = ids.filter(id => creatives[id].t).length;
+      console.log('Artes: ' + ids.length + ' (' + withThumb + ' con miniatura)' + (ids[0] ? ' | ejemplo ' + ids[0] + ': ' + JSON.stringify(creatives[ids[0]]) : ''));
+    } catch (error) {
+      console.log('Artes: ERROR ' + error);
+    }
+    try {
+      const instagram = readInstagram_(brand, null);
+      console.log(instagram ? 'Instagram @' + instagram.username + ': ' + instagram.followers + ' seguidores | ' + JSON.stringify(instagram.months) : 'Instagram: falta la propiedad ' + brand.instagram);
+    } catch (error) {
+      console.log('Instagram: ERROR ' + error);
+    }
+  });
+}
+
 function logBrand_(brand) {
+  if (brand.creatives) console.log('Artes con datos de Meta: ' + Object.keys(brand.creatives).length + (brand.metaError ? ' (' + brand.metaError + ')' : ''));
+  if (brand.instagram) console.log('Instagram @' + brand.instagram.username + ': ' + brand.instagram.followers + ' seguidores');
   brand.months.forEach(month => {
     if (month.error) {
       console.log(month.name + ' ' + month.year + ': ERROR ' + month.error);
@@ -180,6 +220,7 @@ function sweep_(origin) {
         console.error(brand.label + ' (reportes): ' + error);
         entry.reports = Object.assign({}, before ? before.reports : { folder: null, files: [] }, { error: 'No se pudo leer la carpeta de reportes.' });
       }
+      if (metaToken_()) readMeta_(brand, entry, before);
       return entry;
     });
     const snapshot = { version: SWEEP_VERSION, sweptAt: new Date().toISOString(), origin, brands };
@@ -371,6 +412,220 @@ function readReports_(brand) {
     });
   }
   return { folder: { id: folder.getId(), name: folder.getName(), url: folder.getUrl() }, files: list };
+}
+
+// ── Meta (opcional) ──────────────────────────────────────────────────────
+// Un error de la API no deja a la marca sin lo que ya tenia: se conserva lo del barrido anterior y se avisa en
+// metaError.
+function readMeta_(brand, entry, before) {
+  const errors = [];
+  try {
+    entry.creatives = readCreatives_(entry.months, before && before.creatives);
+  } catch (error) {
+    console.error(brand.label + ' (artes de Meta): ' + error);
+    entry.creatives = (before && before.creatives) || {};
+    errors.push('artes: ' + ((error && error.message) || error));
+  }
+  try {
+    const instagram = readInstagram_(brand, before && before.instagram);
+    if (instagram) entry.instagram = instagram;
+  } catch (error) {
+    console.error(brand.label + ' (Instagram): ' + error);
+    if (before && before.instagram) entry.instagram = before.instagram;
+    errors.push('Instagram: ' + ((error && error.message) || error));
+  }
+  if (errors.length) entry.metaError = errors.join(' | ');
+}
+
+function metaToken_() {
+  return String(PropertiesService.getScriptProperties().getProperty('META_TOKEN') || '').trim();
+}
+
+function graph_(path, params) {
+  const query = Object.keys(params).map(key => key + '=' + encodeURIComponent(params[key])).join('&');
+  const response = UrlFetchApp.fetch(META_API + '/' + path + '?' + query + '&access_token=' + encodeURIComponent(metaToken_()), { muteHttpExceptions: true });
+  let body = {};
+  try {
+    body = JSON.parse(response.getContentText() || '{}');
+  } catch (error) {
+    body = {};
+  }
+  if (response.getResponseCode() >= 400 || body.error) {
+    throw new Error('Meta: ' + ((body.error && body.error.message) || 'HTTP ' + response.getResponseCode()));
+  }
+  return body;
+}
+
+// Varios IDs en una consulta (?ids=). Si Meta rechaza el lote (un anuncio de otra cuenta o sin permiso) se piden de a
+// uno para no perder los demas.
+function graphMany_(ids, params) {
+  const result = {};
+  for (let start = 0; start < ids.length; start += META_BATCH) {
+    const part = ids.slice(start, start + META_BATCH);
+    try {
+      Object.assign(result, graph_('', Object.assign({ ids: part.join(',') }, params)));
+    } catch (error) {
+      if (part.length === 1) continue;
+      part.forEach(id => {
+        try {
+          result[id] = graph_(id, params);
+        } catch (single) {
+          console.error(id + ': ' + single);
+        }
+      });
+    }
+  }
+  return result;
+}
+
+// Meses 'yyyy-MM' del en curso hacia atras.
+function recentMonthKeys_(count) {
+  const [year, month] = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-M').split('-').map(Number);
+  const keys = [];
+  for (let back = 0; back < count; back += 1) {
+    const date = new Date(Date.UTC(year, month - 1 - back, 1));
+    keys.push(date.getUTCFullYear() + '-' + String(date.getUTCMonth() + 1).padStart(2, '0'));
+  }
+  return keys;
+}
+
+// El enlace de vista previa de la descarga trae el ID del anuncio (facebook.com/?feed_demo_ad=<id>).
+function adIdOf_(url) {
+  const match = String(url || '').match(/[?&]feed_demo_ad=(\d+)/);
+  return match ? match[1] : '';
+}
+
+// Miniatura y formato de cada anuncio de los ultimos meses: { <id del anuncio>: { f: formato, t: miniatura, p: enlace } }.
+// El anuncio da su creatividad; la publicacion de Instagram (si la tiene) da el formato exacto y la portada.
+function readCreatives_(months, before) {
+  const keys = recentMonthKeys_(META_MONTHS);
+  const seen = {};
+  months.forEach(month => {
+    if (keys.indexOf(month.year + '-' + String(month.month).padStart(2, '0')) < 0 || !Array.isArray(month.rows)) return;
+    const at = (month.columns || []).indexOf('preview');
+    if (at < 0) return;
+    month.rows.forEach(row => {
+      const id = adIdOf_(row[at]);
+      if (id) seen[id] = true;
+    });
+  });
+  const adIds = Object.keys(seen);
+  const creatives = {};
+  if (!adIds.length) return creatives;
+  const ads = graphMany_(adIds, { fields: 'creative{id,object_type,image_url,video_id,effective_instagram_media_id}' });
+  const creativeOf = {};
+  const mediaOf = {};
+  adIds.forEach(id => {
+    const creative = ads[id] && ads[id].creative;
+    if (!creative) return;
+    creatives[id] = { f: creativeFormat_(creative), t: creative.image_url || '' };
+    if (creative.id) creativeOf[id] = creative.id;
+    if (creative.effective_instagram_media_id) mediaOf[id] = creative.effective_instagram_media_id;
+  });
+  // La miniatura de la creatividad sale en 64 px si no se pide el tamano.
+  const thumbs = graphMany_(unique_(Object.keys(creativeOf).map(id => creativeOf[id])), { fields: 'thumbnail_url', thumbnail_width: 320, thumbnail_height: 320 });
+  Object.keys(creativeOf).forEach(id => {
+    const thumb = thumbs[creativeOf[id]] && thumbs[creativeOf[id]].thumbnail_url;
+    if (thumb && !creatives[id].t) creatives[id].t = thumb;
+  });
+  // Requiere instagram_basic sobre la cuenta de Instagram: sin ese permiso queda lo que dijo la creatividad.
+  try {
+    const media = graphMany_(unique_(Object.keys(mediaOf).map(id => mediaOf[id])), { fields: 'media_type,media_product_type,thumbnail_url,media_url,permalink' });
+    Object.keys(mediaOf).forEach(id => {
+      const item = media[mediaOf[id]];
+      if (!item) return;
+      creatives[id].f = instagramFormat_(item) || creatives[id].f;
+      const cover = item.thumbnail_url || (item.media_type !== 'VIDEO' ? item.media_url : '');
+      if (cover) creatives[id].t = cover;
+      if (item.permalink) creatives[id].p = item.permalink;
+    });
+  } catch (error) {
+    console.error('Publicaciones de Instagram: ' + error);
+  }
+  // Un anuncio que Meta ya no devolvio conserva lo del barrido anterior.
+  adIds.forEach(id => {
+    if (!creatives[id] && before && before[id]) creatives[id] = before[id];
+  });
+  return creatives;
+}
+
+function creativeFormat_(creative) {
+  if (creative.video_id || creative.object_type === 'VIDEO') return 'Video';
+  if (creative.object_type === 'PHOTO' || creative.image_url) return 'Imagen';
+  return '';
+}
+
+function instagramFormat_(item) {
+  if (item.media_product_type === 'REELS') return 'Reel';
+  if (item.media_type === 'CAROUSEL_ALBUM') return 'Carrusel';
+  if (item.media_type === 'VIDEO') return 'Video';
+  if (item.media_type === 'IMAGE') return 'Imagen';
+  return '';
+}
+
+function unique_(values) {
+  return values.filter((value, index) => value && values.indexOf(value) === index);
+}
+
+// Seguidores de Instagram de la marca (propiedad IG_USER_<MARCA> con el ID de la cuenta profesional):
+// { username, followers, months: { 'yyyy-MM': { follows, unfollows, through, complete, end } } }.
+// follows y unfollows salen de la metrica follows_and_unfollows; end es el total de seguidores al ultimo barrido
+// del mes (Instagram no da el total de fechas pasadas: el historial se arma barrido a barrido).
+function readInstagram_(brand, before) {
+  const id = String(PropertiesService.getScriptProperties().getProperty(brand.instagram) || '').trim();
+  if (!id) return null;
+  const profile = graph_(id, { fields: 'username,followers_count' });
+  const months = Object.assign({}, (before && before.months) || {});
+  const today = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd');
+  const keys = recentMonthKeys_(META_MONTHS);
+  keys.forEach((key, index) => {
+    const old = months[key];
+    // Un mes que ya se leyo completo no se vuelve a pedir.
+    if (old && old.complete) return;
+    const [year, month] = key.split('-').map(Number);
+    const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    // Hasta ayer: el dia en curso todavia no termina.
+    const lastDay = index === 0 ? Number(today.slice(8, 10)) - 1 : last;
+    const counts = lastDay >= 1 ? followsBetween_(id, year, month, 1, lastDay) : { follows: 0, unfollows: 0 };
+    months[key] = {
+      follows: counts.follows,
+      unfollows: counts.unfollows,
+      through: lastDay >= 1 ? key + '-' + String(lastDay).padStart(2, '0') : '',
+      complete: lastDay === last,
+      end: index === 0 ? profile.followers_count : (old && old.end != null ? old.end : null),
+    };
+  });
+  // Solo los meses de la evolucion: el JSON del barrido no crece mes a mes.
+  Object.keys(months).forEach(key => {
+    if (keys.indexOf(key) < 0) delete months[key];
+  });
+  return { username: profile.username || '', followers: profile.followers_count, months, at: new Date().toISOString() };
+}
+
+// Suma follows_and_unfollows del dia `from` al `to` (inclusive) del mes, en tramos de INSIGHTS_DAYS. Los limites van
+// en hora de Lima (UTC-5): el dia empieza a las 05:00 UTC.
+function followsBetween_(id, year, month, from, to) {
+  const total = { follows: 0, unfollows: 0 };
+  for (let start = from; start <= to; start += INSIGHTS_DAYS) {
+    const end = Math.min(start + INSIGHTS_DAYS - 1, to);
+    const body = graph_(id + '/insights', {
+      metric: 'follows_and_unfollows',
+      period: 'day',
+      metric_type: 'total_value',
+      breakdown: 'follow_type',
+      since: Date.UTC(year, month - 1, start, 5) / 1000,
+      until: Date.UTC(year, month - 1, end + 1, 5) / 1000,
+    });
+    const metric = (body.data || [])[0] || {};
+    const breakdown = ((metric.total_value && metric.total_value.breakdowns) || [])[0] || {};
+    (breakdown.results || []).forEach(item => {
+      const type = String((item.dimension_values || [])[0] || '').toUpperCase();
+      // FOLLOWER = cuentas que empezaron a seguir; NON_FOLLOWER = las que dejaron de seguir.
+      if (type.indexOf('NON') >= 0) total.unfollows += Number(item.value) || 0;
+      else total.follows += Number(item.value) || 0;
+    });
+  }
+  return total;
 }
 
 // Si el nombre no trae ano se asume el ano en curso; si ese mes aun no llega, el ano anterior.

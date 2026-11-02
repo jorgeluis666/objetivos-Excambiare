@@ -4213,6 +4213,379 @@ button.topbar-pill[aria-expanded="true"] .status-chevron {
   font-weight: 600;
 }
 
+/* Reporte con analisis: seis KPIs con su variacion, tabla mes a mes, artes con miniatura y veredicto,
+   proximos pasos por marca y los avisos para el equipo (que no salen en el PDF). */
+.rp-grid-6 {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 11px;
+}
+
+.rp-grid-6 .rp-kpi {
+  min-height: 84px;
+  padding: 10px 14px;
+}
+
+.rp-grid-6 .rp-kpi strong {
+  font-size: 21px;
+}
+
+.rp-kpi .rp-delta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rp-delta.warn {
+  color: #b45309;
+}
+
+.rp-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  vertical-align: 1px;
+}
+
+.rp-unit {
+  color: var(--rp-faint);
+  font-size: 11px;
+}
+
+.rp-verdict {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rp-verdict.good {
+  background: #ecfdf3;
+  color: #15803d;
+}
+
+.rp-verdict.warn {
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.rp-verdict.bad {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.rp-verdict.muted {
+  background: #f1f5f9;
+  color: var(--rp-muted);
+}
+
+.rp-exec th,
+.rp-exec td {
+  padding: 5px 12px;
+  font-size: 12.5px;
+}
+
+.rp-exec th {
+  font-size: 10.5px;
+}
+
+/* Mas de nueve objetivos entre las marcas (un mes con Conversaciones IG o Alcance): filas mas bajas. */
+.rp-exec.dense td {
+  padding-top: 2px;
+  padding-bottom: 2px;
+  font-size: 11.5px;
+}
+
+.rp-exec.dense .rp-verdict {
+  padding: 1px 8px;
+}
+
+.rp-exec-page .rp-body {
+  gap: 10px;
+}
+
+.rp-exec-page .rp-kpi {
+  min-height: 72px;
+}
+
+.rp-exec-page .rp-kpi strong {
+  margin: 4px 0 2px;
+  font-size: 21px;
+}
+
+.rp-exec td[rowspan] {
+  vertical-align: top;
+  border-right: 1px solid var(--rp-line);
+}
+
+.rp-month-table th,
+.rp-month-table td {
+  padding: 7px 12px;
+}
+
+.rp-month-table tr.rp-current td {
+  background: var(--rp-blue-soft);
+  font-weight: 600;
+}
+
+.rp-month-table tr.rp-vs td {
+  border-top: 1px solid #cbd5e1;
+  border-bottom: 0;
+  color: var(--rp-muted);
+  font-size: 12px;
+}
+
+.rp-missing {
+  color: var(--rp-faint);
+  font-style: italic;
+}
+
+.rp-insight-tight p {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.rp-axis-note {
+  fill: var(--rp-faint);
+  font-size: 6.5px;
+  font-style: italic;
+}
+
+.rp-bar-spend {
+  fill: #cbd5e1;
+}
+
+.rp-legend-text {
+  fill: var(--rp-text);
+  font-size: 8.5px;
+}
+
+.rp-charts-row {
+  flex: none;
+  height: 232px;
+}
+
+.rp-charts-row .rp-chart {
+  height: 100%;
+  padding: 10px 12px 4px;
+}
+
+/* Valores de los graficos del reporte un poco mas grandes: se leen en el PDF sin acercar. */
+.rp-deck .rp-point {
+  font-size: 9.5px;
+}
+
+.rp-deck .rp-chart-sub {
+  font-size: 8.5px;
+}
+
+.rp-deck .rp-axis {
+  font-size: 9px;
+}
+
+/* Artes: miniatura (o el icono del formato), nombre, etiquetas y desglose. */
+.rp-arts td {
+  padding-top: 4px;
+  padding-bottom: 4px;
+  vertical-align: middle;
+}
+
+.rp-art {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.rp-thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid var(--rp-line);
+  border-radius: 6px;
+  background: #f1f5f9;
+}
+
+.rp-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.rp-thumb-ph {
+  border-color: #bfd3fb;
+  background: var(--rp-blue-soft);
+  color: var(--rp-blue);
+}
+
+.rp-thumb-ph svg {
+  width: 17px;
+  height: 17px;
+}
+
+.rp-art-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.rp-art-text b {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rp-arts tr.rp-top .rp-art-text b {
+  font-weight: 700;
+}
+
+.rp-art-text > span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.rp-art-text small {
+  color: var(--rp-muted);
+  font-size: 10.5px;
+}
+
+.rp-pill {
+  padding: 1px 7px;
+  border: 1px solid #bfd3fb;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--rp-blue);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.rp-pill.new {
+  border-color: #c4b5fd;
+  color: #6d28d9;
+}
+
+.rp-split-arts {
+  grid-template-columns: 1fr 2fr;
+  flex: none;
+}
+
+.rp-split-single {
+  grid-template-columns: 1fr;
+  flex: none;
+}
+
+.rp-formats .rp-table th,
+.rp-formats .rp-table td {
+  padding: 6px 14px;
+}
+
+.rp-formats .rp-card-title {
+  padding: 13px 14px 10px;
+}
+
+/* Proximos pasos: una columna por marca con replicar, descartar y proximo mes. */
+.rp-next-grid {
+  flex: 1;
+  min-height: 0;
+  padding-bottom: 14px;
+}
+
+.rp-next {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 16px 18px;
+}
+
+.rp-next-head {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.rp-next-block {
+  padding: 8px 11px;
+  border-left: 3px solid var(--rp-line);
+  border-radius: 0 6px 6px 0;
+  background: #f8fafc;
+}
+
+.rp-next-block.good {
+  border-left-color: var(--rp-green);
+}
+
+.rp-next-block.bad {
+  border-left-color: var(--rp-red);
+}
+
+.rp-next-block.blue {
+  border-left-color: var(--rp-blue);
+}
+
+.rp-next-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+
+.rp-next-block.good .rp-next-label {
+  color: var(--rp-green);
+}
+
+.rp-next-block.bad .rp-next-label {
+  color: var(--rp-red);
+}
+
+.rp-next-block.blue .rp-next-label {
+  color: var(--rp-blue);
+}
+
+.rp-next-block p {
+  margin: 4px 0 0;
+  color: var(--rp-text);
+  font-size: 12px;
+  line-height: 1.42;
+}
+
+.rp-num.is-api {
+  color: inherit;
+}
+
+.rp-checklist {
+  margin-bottom: 14px;
+  padding: 14px 18px;
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 13px;
+}
+
+.rp-checklist ul {
+  margin: 8px 0;
+  padding-left: 18px;
+}
+
+.rp-checklist li + li {
+  margin-top: 4px;
+}
+
+.rp-checklist > span {
+  color: #b45309;
+  font-size: 11.5px;
+}
+
 @media print {
   @page {
     size: 1280px 720px;
@@ -4263,7 +4636,8 @@ button.topbar-pill[aria-expanded="true"] .status-chevron {
     box-shadow: none;
   }
 
-  .rp-hint {
+  .rp-hint,
+  .rp-checklist {
     display: none;
   }
 

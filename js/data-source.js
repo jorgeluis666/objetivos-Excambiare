@@ -612,6 +612,37 @@
     }
   }
 
+  // Miniatura, formato y enlace de cada anuncio por su ID (solo si el Web App tiene token de Meta). Las URLs que no son
+  // https se descartan: van directo a un <img> y a un enlace.
+  function normalizeCreatives(raw) {
+    const creatives = new Map();
+    if (!raw || typeof raw !== 'object') return creatives;
+    Object.entries(raw).forEach(([id, item]) => {
+      if (!/^\d+$/.test(id) || !item || typeof item !== 'object') return;
+      const https = value => (/^https:\/\//i.test(String(value || '')) ? String(value) : '');
+      creatives.set(id, { format: String(item.f || ''), thumb: https(item.t), permalink: https(item.p) });
+    });
+    return creatives;
+  }
+
+  // Seguidores de Instagram por mes ('yyyy-MM'), con el total al ultimo barrido. null sin token o sin la cuenta.
+  function normalizeInstagram(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const count = value => (value == null || value === '' || !Number.isFinite(Number(value)) ? null : Number(value));
+    const months = new Map();
+    Object.entries(raw.months && typeof raw.months === 'object' ? raw.months : {}).forEach(([key, item]) => {
+      if (!/^\d{4}-\d{2}$/.test(key) || !item) return;
+      months.set(key, {
+        follows: count(item.follows),
+        unfollows: count(item.unfollows),
+        through: String(item.through || ''),
+        complete: Boolean(item.complete),
+        end: count(item.end),
+      });
+    });
+    return { username: String(raw.username || ''), followers: count(raw.followers), months };
+  }
+
   // Cada marca se normaliza como un barrido propio (sus meses, archivos ignorados y reportes) con la hora y el origen
   // del barrido comun. Una marca que el Web App no pudo leer queda sin meses y con su error.
   function normalizeSweep(payload, source) {
@@ -628,6 +659,9 @@
         reports: raw.reports,
       }, source);
       data.brandError = raw.error ? String(raw.error) : '';
+      data.creatives = normalizeCreatives(raw.creatives);
+      data.instagram = normalizeInstagram(raw.instagram);
+      data.metaError = raw.metaError ? String(raw.metaError) : '';
       return { ...brand, data };
     });
     return { source, sweptAt: String(payload.sweptAt || ''), origin: String(payload.origin || ''), brands };
