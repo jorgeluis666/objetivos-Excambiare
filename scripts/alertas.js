@@ -102,7 +102,9 @@ const sinTildes = v => String(v || '').toLowerCase().normalize('NFD').replace(/[
 
 function tipoDe(resultType) {
   const texto = sinTildes(resultType);
-  if (!texto) return { nombre: 'Sin resultado registrado', nivel: 4, unidad: 'resultados', singular: 'resultado' };
+  // Hay filas con resultados contados y la columna del tipo vacia. Decir «sin resultado» seria
+  // mentira cuando al lado se leen 213: lo que falta es el nombre, no el resultado.
+  if (!texto) return { nombre: 'Resultados sin tipo', nivel: 4, unidad: 'resultados', singular: 'resultado' };
   const conocido = TIPOS.find(t => texto.indexOf(t.busca) >= 0);
   return conocido
     ? { nombre: String(resultType), nivel: conocido.nivel, unidad: conocido.unidad, singular: conocido.singular }
