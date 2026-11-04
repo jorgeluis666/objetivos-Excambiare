@@ -5,7 +5,7 @@ de Inversiones Excambiare: **Sol y Tierra**, **Mex Cream** y **Gold Fusion**. Ca
 descargas y su carpeta de reportes; el tablero las muestra por separado (los resultados de una marca no se suman con
 los de otra). Montos en soles (`CURRENCY` en `js/data-source.js`).
 
-Version actual: `v2.8.0` (v1.x era el tablero anterior, sobre una hoja manual).
+Version actual: `v2.8.1` (v1.x era el tablero anterior, sobre una hoja manual).
 
 ## Versionado
 
@@ -113,8 +113,8 @@ y acentos en azul. No sigue a la marca elegida arriba: lleva MEX (Mex Cream), Go
 | Resumen ejecutivo | Inversion total, alcance, seguidores de pauta y costo por seguidor con su variacion; tabla marca x objetivo (inversion, resultados y costo por resultado con su variacion y la lectura: mejoro o empeoro, por los artes o por el CPM); "Lectura del mes". |
 | Crecimiento de seguidores | Nuevos, bajas, netos, de pauta y costo por seguidor con su variacion; tabla por marca (nuevos, bajas, netos, de pauta, organico, inversion de trafico, costo por seguidor); "Clave". |
 | Evolucion de seguidores | Seguidores de pauta y costo por seguidor por mes y por marca (ultimos 4 meses), tabla mes a mes y "Evolucion" (que movio el costo: mas o menos seguidores o mas o menos inversion). |
-| Por marca y objetivo: evolucion | 6 KPIs con su variacion contra el mes anterior con datos (inversion, resultados, costo por resultado, CPM, alcance y resultados por mil impresiones); grafico de inversion, resultados y costo por mes con el valor en cada punto (un mes sin datos queda marcado); tabla mes a mes con la comparacion contra el promedio de los meses anteriores; "Por que cambio". |
-| Por marca y objetivo: artes | Hasta 6 artes con miniatura (o el icono de su formato), formato, nuevo, inversion, resultados, costo, comparacion contra el promedio y veredicto (Replicar, Mantener, Ajustar, Renovar, Descartar, Poca data); en Interaccion, el desglose de cada arte; en Trafico, los seguidores de cada arte; resultado por formato y "Que funciona". |
+| Por marca y objetivo: evolucion | 6 KPIs con su variacion contra el mes anterior con datos (inversion, resultados, costo por resultado, CPM, alcance —en Trafico al perfil, seguidores— y resultados por mil impresiones); grafico de inversion, resultados y costo por mes con el valor en cada punto (un mes sin datos queda marcado); tabla mes a mes con la comparacion contra el promedio de los meses anteriores; "Por que cambio". |
+| Por marca y objetivo: artes | Hasta 6 artes con miniatura (o el icono de su formato), formato, nuevo, inversion, resultados, costo, comparacion contra el promedio y veredicto (Replicar, Mantener, Ajustar, Renovar, Descartar, Poca data); en Interaccion, el desglose de cada arte (solo las columnas que trae la descarga); en Trafico, los seguidores y el costo por seguidor de cada arte; resultado por formato y "Que funciona" (el mejor arte, el mas eficiente, el que hay que cortar, nuevos contra los que siguieron y el formato, por importancia hasta lo que cabe en la lamina). |
 | Conclusiones | Seguidores, artes para replicar (y el formato que domina) y que movio los costos; nota del periodo. |
 | Que replicar, que descartar y proximos pasos | Una columna por marca con los artes a replicar, los que hay que descartar o ajustar y lo que toca el mes siguiente. |
 | Cierre | Logo y firma de Lima Retail. |
@@ -129,7 +129,10 @@ y acentos en azul. No sigue a la marca elegida arriba: lleva MEX (Mex Cream), Go
 - **Veredicto de cada arte:** su costo por resultado contra el del objetivo en el mes. Replicar = 20% o mas barato;
   Ajustar = 15% o mas caro; Descartar = 50% o mas caro con al menos el 5% de la inversion (o sin resultados);
   Renovar = ya corria el mes anterior y su costo subio 40% o mas; Poca data = menos de S/ 3 o 500 impresiones.
-  Nuevo = no corrio el mes inmediato anterior. Umbrales en `VERDICT` de `js/report-week.js`.
+  Nuevo = no corrio el mes inmediato anterior. Umbrales en `VERDICT` de `js/report-week.js`. En Trafico al perfil,
+  con 10 seguidores o mas en el mes (`MIN_FOLLOWS`), lo que se busca son seguidores: los artes se ordenan por
+  seguidores y el veredicto y "vs prom." van por el costo por seguidor; un arte sin seguidores se juzga recien cuando
+  gasto lo que cuestan 1.5 seguidores al promedio.
 - **Formato:** con token de Meta en el Web App (ver "Meta en el Web App") llega el exacto (reel, video, carrusel o
   imagen) y la miniatura. Sin el, se deduce de las reproducciones de 3 s: Video o Estatico.
 - **Seguidores:** de pauta = seguidores que trajeron los anuncios de todas las campañas (columna Seguimientos de

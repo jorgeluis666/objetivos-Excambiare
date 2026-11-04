@@ -22,11 +22,18 @@
   const LOGO = 'assets/logo-lima-retail.png';
   const EVOLUTION_MONTHS = 4;
   const MAX_ADS = 6;
+  // Largo del "Que funciona" de la lamina de artes (caracteres): mas texto empuja la tabla fuera de la lamina.
+  const ARTS_TEXT_MAX = 620;
   // Un cambio menor a esto se lee como estable.
   const STEADY = 0.05;
   // Veredicto de cada arte: su costo por resultado contra el del objetivo en el mes. Con muy poca entrega no se juzga.
   // Renovar: ya corria el mes anterior y ahora cuesta bastante mas (desgaste de la pieza).
   const VERDICT = { minSpend: 3, minImpressions: 500, replicate: 0.8, adjust: 1.15, discard: 1.5, discardShare: 0.05, fatigue: 1.4 };
+  // En Trafico al perfil lo que se busca son seguidores: desde estos seguidores en el mes, cada arte se juzga por su costo
+  // por seguidor y no por el de la visita.
+  const MIN_FOLLOWS = 10;
+  // Desglose de las interacciones que trae la descarga (solo las columnas que vinieron: una que falta no es un 0).
+  const ENGAGEMENT = [['plays3s', 'reprod.'], ['reactions', 'reacc.'], ['saves', 'guard.'], ['shares', 'compart.'], ['comments', 'coment.']];
   const VERDICTS = {
     replicar: { label: 'Replicar', tone: 'good' },
     mantener: { label: 'Mantener', tone: 'muted' },
@@ -237,26 +244,27 @@
       .sort((left, right) => right.value - left.value || right.spend - left.spend);
   }
 
-  function verdictOf(ad, sum, before) {
+  // Veredicto de un arte por lo que se mide en su objetivo (score: resultados o seguidores) contra el promedio del mes.
+  function verdictOf(ad, average, beforeCost) {
     if (ad.spend < VERDICT.minSpend || ad.impressions < VERDICT.minImpressions) return 'poca';
-    if (!(ad.value > 0)) return 'descartar';
-    const index = ad.cost / sum.costPerResult;
-    if (before?.cost > 0 && ad.cost / before.cost >= VERDICT.fatigue && index > 1) return 'fatiga';
+    if (!(ad.score > 0)) return 'descartar';
+    const index = ad.scoreCost / average.cost;
+    if (beforeCost > 0 && ad.scoreCost / beforeCost >= VERDICT.fatigue && index > 1) return 'fatiga';
     if (index <= VERDICT.replicate) return 'replicar';
-    if (index >= VERDICT.discard && ad.spend / sum.spend >= VERDICT.discardShare) return 'descartar';
+    if (index >= VERDICT.discard && ad.spend / average.spend >= VERDICT.discardShare) return 'descartar';
     if (index >= VERDICT.adjust) return 'ajustar';
     return 'mantener';
   }
 
-  // Resultado por formato (solo artes con resultados), del mas barato al mas caro.
+  // Lo medido por formato (solo artes que lo lograron), del mas barato al mas caro.
   function formatsOf(ads) {
     const byFormat = new Map();
-    ads.filter(ad => ad.format && ad.value > 0).forEach(ad => {
+    ads.filter(ad => ad.format && ad.score > 0).forEach(ad => {
       if (!byFormat.has(ad.format)) byFormat.set(ad.format, { format: ad.format, count: 0, spend: 0, results: 0 });
       const item = byFormat.get(ad.format);
       item.count += 1;
       item.spend += ad.spend;
-      item.results += ad.value;
+      item.results += ad.score;
     });
     return [...byFormat.values()].map(item => ({ ...item, cost: item.spend / item.results })).sort((left, right) => left.cost - right.cost);
   }
@@ -275,19 +283,29 @@
     const gap = prev ? history.slice(history.indexOf(prev) + 1, -1) : [];
     const previous = earlier.slice(-3);
     const sum = current.sum;
+    const byFollows = def.key === 'trafico-perfil' && current.found.includes('follows') && sum.follows >= MIN_FOLLOWS;
+    const scoreOf = item => (byFollows ? item.follows : item.results);
+    const costOf = item => (scoreOf(item) > 0 ? item.spend / scoreOf(item) : null);
+    const score = byFollows
+      ? { unit: 'seguidores', one: 'seguidor', of: 'de los seguidores', total: sum.follows, cost: costOf(sum) }
+      : { unit: def.unit, one: def.one, of: 'de los resultados', total: sum.results, cost: sum.costPerResult };
     const prevAds = new Map(prev ? adsOf(prev.rows, data, prev.found).map(ad => [ad.key, ad]) : []);
     const ads = adsOf(current.rows, data, current.found).map(ad => {
       const before = prevAds.get(ad.key) || null;
+      const scored = { ...ad, score: scoreOf(ad), scoreCost: costOf(ad), scoreBefore: before ? costOf(before) : null };
+      // Sin seguidores, un arte que gasto menos de lo que cuestan 1.5 seguidores al promedio todavia no se juzga.
+      const early = byFollows && !(scored.score > 0) && ad.spend < score.cost * VERDICT.discard;
       return {
-        ...ad,
+        ...scored,
         before,
         // Nuevo: no corrio en ningun objetivo de la marca el mes anterior con datos (null si no hay mes anterior).
         isNew: known ? !known.has(ad.key) : null,
-        index: ad.cost && sum.costPerResult ? ad.cost / sum.costPerResult : null,
-        verdict: verdictOf(ad, sum, before),
+        index: scored.scoreCost && score.cost ? scored.scoreCost / score.cost : null,
+        verdict: early ? 'poca' : verdictOf(scored, { spend: sum.spend, cost: score.cost }, scored.scoreBefore),
       };
     });
-    const judged = ads.filter(ad => ad.verdict !== 'poca' && ad.value > 0);
+    if (byFollows) ads.sort((left, right) => right.follows - left.follows || right.value - left.value);
+    const judged = ads.filter(ad => ad.verdict !== 'poca' && ad.score > 0);
     return {
       ...def,
       history,
@@ -297,8 +315,10 @@
       gap,
       previous,
       avg: previous.length ? averageOf(previous) : null,
+      byFollows,
+      score,
       ads,
-      // El mejor arte: el de mas resultados entre los que costaron igual o menos que el promedio.
+      // El mejor arte: el que mas logro entre los que costaron igual o menos que el promedio.
       best: judged.find(ad => ad.index <= 1) || judged[0] || null,
       formats: formatsOf(ads),
       found: current.found,
@@ -469,6 +489,10 @@
       else reading = 'inversión y resultados se mantuvieron';
       parts.push(`Inversión ${signedMoney(sum.spend - prev.sum.spend)} (${pctText(spendChange)}) y ${section.unit} ${signed(sum.results - prev.sum.results)} (${pctText(resultChange)}): ${reading}.`);
     }
+    // En Trafico al perfil las visitas son el camino: lo que se busca son los seguidores que trajeron esos anuncios.
+    if (section.key === 'trafico-perfil' && section.found.includes('follows') && prev.found.includes('follows') && sum.follows > 0) {
+      parts.push(`Sus anuncios trajeron ${num(sum.follows)} seguidores a ${money2(sum.spend / sum.follows)} cada uno (${vs}: ${num(prev.sum.follows)}${prev.sum.follows > 0 ? ` a ${money2(prev.sum.spend / prev.sum.follows)}` : ''}).`);
+    }
     if (section.avg && section.previous.length >= 2) {
       const avgChange = change(sum.costPerResult, section.avg.costPerResult);
       if (avgChange !== null) {
@@ -478,35 +502,59 @@
     return parts.join(' ');
   }
 
-  // Que funciona: el mejor arte y por que, el que hay que cortar, nuevos contra los que siguieron y el formato.
+  // Que funciona: el mejor arte y por que, el mas eficiente, el que hay que cortar, nuevos contra los que siguieron y el
+  // formato. En Trafico al perfil con seguidores, todo por seguidor.
   function suggestArts(section) {
-    const { sum } = section;
+    const { sum, score } = section;
+    const per = section.byFollows ? ' por seguidor' : '';
+    // Cada frase con su importancia (1 = la primera que entra).
     const parts = [];
+    const add = (rank, text) => parts.push({ rank, text });
     const best = section.best;
     if (best) {
-      parts.push(`**"${best.name}" fue el arte que mejor rindió:** ${num(best.value)} ${section.unit} a ${cost(best.cost)} (${pctText(best.index - 1)} vs el promedio), ${share(best.value, sum.results)} de los resultados con ${share(best.spend, sum.spend)} de la inversión${best.format ? `; formato ${best.format.toLowerCase()}` : ''}.`);
+      add(1, `**"${best.name}" fue el arte que ${section.byFollows ? 'más seguidores trajo' : 'mejor rindió'}:** ${num(best.score)} ${score.unit} a ${cost(best.scoreCost)}${section.byFollows ? ' cada uno' : ''} (${pctText(best.index - 1)} vs el promedio), ${share(best.score, score.total)} ${score.of} con ${share(best.spend, sum.spend)} de la inversión${best.format ? `; formato ${best.format.toLowerCase()}` : ''}.`);
+    }
+    // Un arte mas barato que el mejor pero con menos inversion: el candidato a recibir mas presupuesto.
+    const efficient = section.ads.filter(ad => ad.verdict === 'replicar' && ad !== best).sort((left, right) => left.index - right.index)[0];
+    if (best && efficient && efficient.index < best.index) {
+      add(3, `"${efficient.name}" fue el más eficiente: ${cost(efficient.scoreCost)}${per} (${pctText(efficient.index - 1)}) con ${money(efficient.spend)}; merece más presupuesto.`);
     }
     const worst = section.ads.filter(ad => ad.verdict === 'descartar' || ad.verdict === 'fatiga').sort((left, right) => right.spend - left.spend)[0];
     if (worst) {
-      if (!(worst.value > 0)) parts.push(`"${worst.name}" gastó ${money(worst.spend)} sin resultados: pausarlo.`);
-      else if (worst.verdict === 'fatiga') parts.push(`"${worst.name}" ya corría en ${monthLong(section.prev.key)} y su costo subió ${pctAbs(worst.cost / worst.before.cost - 1)}: la pieza se desgastó, toca renovarla.`);
-      else parts.push(`"${worst.name}" costó ${times(worst.index)} el promedio (${cost(worst.cost)}) con ${money(worst.spend)} invertidos: conviene pausarlo y pasar ese presupuesto a los artes que funcionan.`);
+      if (!(worst.score > 0)) add(2, `"${worst.name}" gastó ${money(worst.spend)} sin ${section.byFollows ? 'traer seguidores' : 'resultados'}: pausarlo.`);
+      else if (worst.verdict === 'fatiga') add(2, `"${worst.name}" ya corría en ${monthLong(section.prev.key)} y su costo${per} subió ${pctAbs(worst.scoreCost / worst.scoreBefore - 1)}: la pieza se desgastó, toca renovarla.`);
+      else add(2, `"${worst.name}" costó ${times(worst.index)} el promedio${per} (${cost(worst.scoreCost)}) con ${money(worst.spend)} invertidos: conviene pausarlo y pasar ese presupuesto a los artes que funcionan.`);
     }
     // Los anuncios traen las mismas sumas que las filas: se suman igual.
-    const fresh = totals(section.ads.filter(ad => ad.isNew === true));
-    const kept = totals(section.ads.filter(ad => ad.isNew === false));
-    if (fresh.costPerResult && kept.costPerResult) {
-      parts.push(`Los artes nuevos del mes costaron ${cost(fresh.costPerResult)} por ${section.one} contra ${cost(kept.costPerResult)} de los que siguieron${fresh.costPerResult < kept.costPerResult ? ': la renovación de piezas funcionó' : ': los nuevos todavía no superan a los anteriores'}.`);
+    const costOf = ads => {
+      const all = totals(ads);
+      const value = section.byFollows ? all.follows : all.results;
+      return value > 0 ? all.spend / value : null;
+    };
+    const fresh = costOf(section.ads.filter(ad => ad.isNew === true));
+    const kept = costOf(section.ads.filter(ad => ad.isNew === false));
+    if (fresh && kept) {
+      add(5, `Los artes nuevos del mes costaron ${cost(fresh)} por ${score.one} contra ${cost(kept)} de los que siguieron${fresh < kept ? ': la renovación de piezas funcionó' : ': los nuevos todavía no superan a los anteriores'}.`);
     }
     if (section.formats.length >= 2) {
       const top = section.formats[0];
       const low = section.formats[section.formats.length - 1];
-      parts.push(`Por formato, ${FORMAT_PLURAL[top.format] || top.format} rindieron mejor (${cost(top.cost)} por ${section.one}) que ${FORMAT_PLURAL[low.format] || low.format} (${cost(low.cost)}).`);
+      add(4, `Por formato, ${FORMAT_PLURAL[top.format] || top.format} rindieron mejor (${cost(top.cost)} por ${score.one}) que ${FORMAT_PLURAL[low.format] || low.format} (${cost(low.cost)}).`);
     }
     if (section.key === 'interaccion' && section.found.includes('plays3s') && sum.results > 0 && sum.plays3s > 0) {
-      parts.push(`El ${share(Math.min(sum.plays3s, sum.results), sum.results)} de las interacciones son reproducciones de video; ${num(sum.reactions)} reacciones, ${num(sum.saves)} guardados y ${num(sum.shares)} compartidos muestran el engagement activo.`);
+      const active = [['reactions', 'reacciones'], ['saves', 'guardados'], ['shares', 'compartidos'], ['comments', 'comentarios']]
+        .filter(([field]) => section.found.includes(field))
+        .map(([field, label]) => `${num(sum[field])} ${label}`);
+      add(6, `El ${share(Math.min(sum.plays3s, sum.results), sum.results)} de las interacciones son reproducciones de video${active.length ? `; ${list(active)} muestran el engagement activo` : ''}.`);
     }
-    return parts.join(' ') || `${num(sum.results)} ${section.unit} en el período con ${money(sum.spend)} de inversión.`;
+    // Las frases entran por importancia mientras quepan en la lamina y se leen en su orden natural.
+    let length = 0;
+    const chosen = new Set([...parts].sort((left, right) => left.rank - right.rank).filter(part => {
+      if (length && length + part.text.length > ARTS_TEXT_MAX) return false;
+      length += part.text.length + 1;
+      return true;
+    }));
+    return parts.filter(part => chosen.has(part)).map(part => part.text).join(' ') || `${num(sum.results)} ${section.unit} en el período con ${money(sum.spend)} de inversión.`;
   }
 
   const cheapest = items => items.filter(item => finite(item.costPerFollower)).sort((left, right) => left.costPerFollower - right.costPerFollower)[0] || null;
@@ -599,31 +647,33 @@
   // Lo que hay que replicar, cortar y hacer el proximo mes en una marca (una linea por punto).
   function suggestNext(brand, report) {
     const all = brand.sections.flatMap(section => section.ads.map(ad => ({ ad, section })));
+    const per = section => (section.byFollows ? ' por seguidor' : '');
     const replicate = byArt(all.filter(item => item.ad.verdict === 'replicar'), (item, entry) => item.ad.index < entry.ad.index)
-      .sort((left, right) => right.ad.value / right.section.sum.results - left.ad.value / left.section.sum.results)
+      .sort((left, right) => right.ad.score / right.section.score.total - left.ad.score / left.section.score.total)
       .slice(0, 3)
-      .map(({ ad, titles }) => `• "${clip(ad.name)}" (${list(titles)}): ${titles.length > 1 ? 'hasta ' : ''}${pctAbs(1 - ad.index)} más barato que el promedio${ad.format ? `, ${ad.format.toLowerCase()}` : ''}.`);
+      .map(({ ad, section, titles }) => `• "${clip(ad.name)}" (${list(titles)}): ${titles.length > 1 ? 'hasta ' : ''}${pctAbs(1 - ad.index)} más barato${per(section)} que el promedio${ad.format ? `, ${ad.format.toLowerCase()}` : ''}.`);
     const cut = byArt(all.filter(item => ['descartar', 'fatiga', 'ajustar'].includes(item.ad.verdict)), (item, entry) => item.ad.spend > entry.ad.spend)
       .sort((left, right) => right.ad.spend - left.ad.spend)
       .slice(0, 3)
       .map(({ ad, section, titles }) => {
         const where = `"${clip(ad.name)}" (${list(titles)})`;
-        if (!(ad.value > 0)) return `• ${where}: ${money(ad.spend)} sin resultados; pausar.`;
-        if (ad.verdict === 'fatiga') return `• ${where}: su costo subió ${pctAbs(ad.cost / ad.before.cost - 1)} desde ${monthLong(section.prev.key)}; renovar la pieza.`;
-        return `• ${where}: ${times(ad.index)} el costo promedio; ${ad.verdict === 'descartar' ? 'pausar y mover el presupuesto' : 'probar otro gancho o portada'}.`;
+        if (!(ad.score > 0)) return `• ${where}: ${money(ad.spend)} sin ${section.byFollows ? 'seguidores' : 'resultados'}; pausar.`;
+        if (ad.verdict === 'fatiga') return `• ${where}: su costo${per(section)} subió ${pctAbs(ad.scoreCost / ad.scoreBefore - 1)} desde ${monthLong(section.prev.key)}; renovar la pieza.`;
+        return `• ${where}: ${times(ad.index)} el costo promedio${per(section)}; ${ad.verdict === 'descartar' ? 'pausar y mover el presupuesto' : 'probar otro gancho o portada'}.`;
       });
     const next = [];
     brand.sections.forEach(section => {
       const { costChange, driver } = section;
       if (costChange === null) return;
       if (costChange >= 0.1 && driver.main === 'rate') next.push(`• ${section.title}: renovar artes; la respuesta por mil impresiones cayó ${pctAbs(driver.rateChange)}.`);
-      else if (costChange >= 0.1 && driver.main === 'cpm') next.push(`• ${section.title}: ampliar o refrescar el público; el CPM subió ${pctAbs(driver.cpmChange)}.`);
+      // Si los artes respondieron mejor y aun asi subio el costo, el problema es solo el publico o la subasta.
+      else if (costChange >= 0.1 && driver.main === 'cpm') next.push(`• ${section.title}: ampliar o refrescar el público; el CPM subió ${pctAbs(driver.cpmChange)}${driver.rateChange >= STEADY ? ` aunque los artes respondieron ${pctAbs(driver.rateChange)} mejor` : ''}.`);
       else if (costChange <= -0.1) next.push(`• ${section.title}: sostener la inversión y escalar lo que funciona; el costo bajó ${pctAbs(costChange)}.`);
     });
     brand.sections.forEach(section => {
       const top = section.formats[0];
       const low = section.formats[section.formats.length - 1];
-      if (top && low && top !== low && low.cost / top.cost >= 1.25) next.push(`• ${section.title}: priorizar ${FORMAT_PLURAL[top.format] || top.format}; costaron ${pctAbs(1 - top.cost / low.cost)} menos por ${section.one}.`);
+      if (top && low && top !== low && low.cost / top.cost >= 1.25) next.push(`• ${section.title}: priorizar ${FORMAT_PLURAL[top.format] || top.format}; costaron ${pctAbs(1 - top.cost / low.cost)} menos por ${section.score.one}.`);
     });
     const wasted = all.filter(item => item.ad.verdict === 'descartar').reduce((total, item) => total + item.ad.spend, 0);
     if (wasted >= 5) next.push(`• Reasignar ${money(wasted)} de los artes a descartar hacia los que se replican.`);
@@ -1029,14 +1079,16 @@
     }).join('');
     const missing = report.brands.filter(brand => !brand.followers[last].hasColumn).map(brand => brand.name);
     const sourceNote = report.hasInstagram ? 'Nuevos y bajas: Instagram.' : 'Nuevos y bajas: Meta Business Suite.';
+    // Sin la cifra de alguna marca el total no existe: se dice que falta, no que no hay mes anterior.
+    const lacking = `<span class="rp-delta muted">Falta el dato de ${report.hasInstagram ? 'Instagram' : 'Meta Business Suite'}</span>`;
     return `
       <section class="rp-page">
         ${head('Crecimiento de seguidores', `Nuevos, bajas, de pauta y orgánicos · costo por seguidor · ${report.labels.window}`)}
         <div class="rp-body">
           <div class="rp-grid-5">
-            ${kpi('Nuevos', num(current.nuevos), delta(change(current.nuevos, prev?.nuevos), prev?.nuevos != null ? prev.key : null, 'up'))}
-            ${kpi('Bajas', current.dejaron === null ? '—' : `-${num(current.dejaron)}`, delta(change(current.dejaron, prev?.dejaron), prev?.dejaron != null ? prev.key : null, 'down'))}
-            ${kpi('Netos', signed(current.netos), '<span class="rp-delta muted">Nuevos − bajas</span>')}
+            ${kpi('Nuevos', num(current.nuevos), current.nuevos === null ? lacking : delta(change(current.nuevos, prev?.nuevos), prev?.nuevos != null ? prev.key : null, 'up'))}
+            ${kpi('Bajas', current.dejaron === null ? '—' : `-${num(current.dejaron)}`, current.dejaron === null ? lacking : delta(change(current.dejaron, prev?.dejaron), prev?.dejaron != null ? prev.key : null, 'down'))}
+            ${kpi('Netos', signed(current.netos), current.netos === null ? lacking : '<span class="rp-delta muted">Nuevos − bajas</span>')}
             ${kpi('De pauta', num(current.paid), delta(change(current.paid, prev?.paid), prev?.key, 'up'))}
             ${kpi('Costo por seguidor', money2(current.costPerFollower), delta(change(current.costPerFollower, prev?.costPerFollower), prev?.key, 'down'))}
           </div>
@@ -1137,7 +1189,9 @@
             ${kpi(section.noun, num(sum.results), delta(change(sum.results, before?.results), prevKey, 'up'))}
             ${kpi('Costo/result.', cost(sum.costPerResult), delta(section.costChange, prevKey, 'down'))}
             ${kpi('CPM', money2(sum.cpm), delta(change(sum.cpm, before?.cpm), prevKey, 'down'))}
-            ${kpi('Alcance', num(sum.reach), delta(change(sum.reach, before?.reach), prevKey, 'up'))}
+            ${section.key === 'trafico-perfil' && section.found.includes('follows')
+              ? kpi('Seguidores', num(sum.follows), delta(prev?.found.includes('follows') ? change(sum.follows, before.follows) : null, prevKey, 'up'))
+              : kpi('Alcance', num(sum.reach), delta(change(sum.reach, before?.reach), prevKey, 'up'))}
             ${kpi('× mil impr.', rateText(sum.rate), delta(change(sum.rate, before?.rate), prevKey, 'up'))}
           </div>
           <div class="rp-split">
@@ -1161,19 +1215,19 @@
     const shown = section.ads.slice(0, MAX_ADS);
     const rest = section.ads.slice(MAX_ADS);
     const follows = section.key === 'trafico-perfil' && section.found.includes('follows');
-    const detail = section.key === 'interaccion' && section.found.includes('plays3s');
+    const detail = section.key === 'interaccion' && section.found.includes('plays3s') ? ENGAGEMENT.filter(([field]) => section.found.includes(field)) : [];
     const rows = shown.map(ad => {
       const verdict = VERDICTS[ad.verdict];
       const tags = `${ad.format ? `<span class="rp-pill">${esc(ad.format)}</span>` : ''}${ad.isNew ? '<span class="rp-pill new">Nuevo</span>' : ''}`;
-      const sub = detail ? `<small>${compact(ad.plays3s)} reprod. · ${num(ad.reactions)} reacc. · ${num(ad.saves)} guard. · ${num(ad.shares)} compart.</small>` : '';
+      const sub = detail.length ? `<small>${detail.map(([field, label]) => `${field === 'plays3s' ? compact(ad[field]) : num(ad[field])} ${label}`).join(' · ')}</small>` : '';
       return `
         <tr${ad === section.best ? ' class="rp-top"' : ''}>
           <td><div class="rp-art">${thumb(ad)}<div class="rp-art-text"><b title="${esc(ad.name)}">${esc(ad.name)}</b><span>${tags}${sub}</span></div></div></td>
           <td class="num">${money(ad.spend)}</td>
           <td class="num">${num(ad.value)}</td>
           <td class="num">${cost(ad.cost)}</td>
+          ${follows ? `<td class="num">${num(ad.follows)}</td><td class="num">${ad.follows > 0 ? money2(ad.spend / ad.follows) : '<span class="rp-faint">—</span>'}</td>` : ''}
           <td class="num">${ad.index ? deltaCell(ad.index - 1, 'down') : '<span class="rp-faint">—</span>'}</td>
-          ${follows ? `<td class="num">${num(ad.follows)}</td>` : ''}
           <td><span class="rp-verdict ${verdict.tone}">${verdict.label}</span></td>
           <td class="num">${previewLink(ad)}</td>
         </tr>`;
@@ -1183,7 +1237,7 @@
       <div class="rp-card rp-table-card rp-formats">
         <div class="rp-card-title">Por formato</div>
         <table class="rp-table">
-          <thead><tr><th>Formato</th><th class="num">Artes</th><th class="num">Inversión</th><th class="num">Costo</th></tr></thead>
+          <thead><tr><th>Formato</th><th class="num">Artes</th><th class="num">Inversión</th><th class="num">${section.byFollows ? 'Costo/seg.' : 'Costo'}</th></tr></thead>
           <tbody>${section.formats.map((item, index) => `<tr${index === 0 && section.formats.length > 1 ? ' class="rp-top"' : ''}><td class="rp-name">${esc(item.format)}</td><td class="num">${item.count}</td><td class="num">${money(item.spend)}</td><td class="num">${cost(item.cost)}</td></tr>`).join('')}</tbody>
         </table>
       </div>` : '';
@@ -1193,11 +1247,13 @@
         <div class="rp-body">
           <div class="rp-card rp-table-card">
             <table class="rp-table rp-arts">
-              <colgroup><col><col style="width:9%"><col style="width:9%"><col style="width:10%"><col style="width:8%">${follows ? '<col style="width:7%">' : ''}<col style="width:10%"><col style="width:6%"></colgroup>
-              <thead><tr><th>Arte</th><th class="num">Inversión</th><th class="num">${esc(section.abbr)}</th><th class="num">Costo/result.</th><th class="num">vs prom.</th>${follows ? '<th class="num">Seguid.</th>' : ''}<th>Veredicto</th><th class="num">Ver</th></tr></thead>
+              <colgroup><col><col style="width:9%"><col style="width:8%"><col style="width:10%">${follows ? '<col style="width:7%"><col style="width:9%">' : ''}<col style="width:8%"><col style="width:10%"><col style="width:6%"></colgroup>
+              <thead><tr><th>Arte</th><th class="num">Inversión</th><th class="num">${esc(section.abbr)}</th><th class="num">${follows ? 'Costo/visita' : 'Costo/result.'}</th>${follows ? '<th class="num">Seguid.</th><th class="num">Costo/seg.</th>' : ''}<th class="num">vs prom.</th><th>Veredicto</th><th class="num">Ver</th></tr></thead>
               <tbody>${rows}</tbody>
             </table>
-            <div class="rp-table-foot">Promedio del objetivo: ${cost(section.sum.costPerResult)} por ${esc(section.one)}. Replicar = 20% o más barato que el promedio; Ajustar = 15% o más caro; Descartar = 50% o más caro con inversión relevante; Renovar = ya corría y su costo subió 40% o más.${rest.length ? ` ${rest.length} artes más con ${money(restSpend)} de inversión.` : ''}</div>
+            <div class="rp-table-foot">${section.byFollows
+              ? `Promedio del objetivo: ${cost(section.sum.costPerResult)} por visita y ${money2(section.score.cost)} por seguidor; aquí se busca seguidores, así que "vs prom." y el veredicto van por el costo por seguidor.`
+              : `Promedio del objetivo: ${cost(section.sum.costPerResult)} por ${esc(section.one)}.`} Replicar = 20% o más barato que el promedio; Ajustar = 15% o más caro; Descartar = 50% o más caro con inversión relevante; Renovar = ya corría y su costo subió 40% o más.${rest.length ? ` ${rest.length} artes más con ${money(restSpend)} de inversión.` : ''}</div>
           </div>
           <div class="rp-split ${formats ? 'rp-split-arts' : 'rp-split-single'}">
             ${formats}
