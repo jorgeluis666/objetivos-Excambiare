@@ -12,10 +12,14 @@
 // miniatura y el formato de sus artes (creatives) y, con IG_USER_<MARCA>, los seguidores nuevos y las bajas de su
 // Instagram por mes (instagram). Sin token todo sigue igual: el reporte deduce el formato de las reproducciones y las
 // cifras de seguidores se escriben sobre la lamina.
+// Artes (modulo Anuncios y Generacion de Reporte): el barrido lee la carpeta "06 Artes" que esta junto a la de descargas
+// de cada marca (01 Meta Ads) y manda el ID de Drive de la pieza de cada anuncio. Sin propiedad nueva; ARTES_FOLDER_<MARCA>
+// solo hace falta si la carpeta esta en otro lugar. Para que el cliente vea las miniaturas, la carpeta va compartida
+// como "Cualquier persona con el enlace: Lector".
 const BRANDS = [
-  { key: 'sol-y-tierra', label: 'Sol y Tierra', data: 'DATA_FOLDER_SOL_Y_TIERRA', reports: 'REPORTS_FOLDER_SOL_Y_TIERRA', instagram: 'IG_USER_SOL_Y_TIERRA' },
-  { key: 'mex-cream', label: 'Mex Cream', data: 'DATA_FOLDER_MEX_CREAM', reports: 'REPORTS_FOLDER_MEX_CREAM', instagram: 'IG_USER_MEX_CREAM' },
-  { key: 'gold-fusion', label: 'Gold Fusion', data: 'DATA_FOLDER_GOLD_FUSION', reports: 'REPORTS_FOLDER_GOLD_FUSION', instagram: 'IG_USER_GOLD_FUSION' },
+  { key: 'sol-y-tierra', label: 'Sol y Tierra', data: 'DATA_FOLDER_SOL_Y_TIERRA', reports: 'REPORTS_FOLDER_SOL_Y_TIERRA', instagram: 'IG_USER_SOL_Y_TIERRA', artes: 'ARTES_FOLDER_SOL_Y_TIERRA' },
+  { key: 'mex-cream', label: 'Mex Cream', data: 'DATA_FOLDER_MEX_CREAM', reports: 'REPORTS_FOLDER_MEX_CREAM', instagram: 'IG_USER_MEX_CREAM', artes: 'ARTES_FOLDER_MEX_CREAM' },
+  { key: 'gold-fusion', label: 'Gold Fusion', data: 'DATA_FOLDER_GOLD_FUSION', reports: 'REPORTS_FOLDER_GOLD_FUSION', instagram: 'IG_USER_GOLD_FUSION', artes: 'ARTES_FOLDER_GOLD_FUSION' },
 ];
 const META_API = 'https://graph.facebook.com/v21.0';
 // Meses con miniaturas y seguidores: los de la evolucion del reporte (el en curso y los tres anteriores). Las URLs de
@@ -172,6 +176,7 @@ function probarMeta() {
 }
 
 function logBrand_(brand) {
+  if (brand.artes) console.log('Artes en Drive: ' + Object.keys(brand.artes.piezas).length + ' piezas' + (brand.artes.error ? ' (' + brand.artes.error + ')' : ''));
   if (brand.creatives) console.log('Artes con datos de Meta: ' + Object.keys(brand.creatives).length + (brand.metaError ? ' (' + brand.metaError + ')' : ''));
   if (brand.instagram) console.log('Instagram @' + brand.instagram.username + ': ' + brand.instagram.followers + ' seguidores');
   brand.months.forEach(month => {
@@ -219,6 +224,14 @@ function sweep_(origin) {
       } catch (error) {
         console.error(brand.label + ' (reportes): ' + error);
         entry.reports = Object.assign({}, before ? before.reports : { folder: null, files: [] }, { error: 'No se pudo leer la carpeta de reportes.' });
+      }
+      // Las piezas son accesorias: si su carpeta falla quedan las del barrido anterior y el resto sigue.
+      try {
+        const artes = readArtes_(brand);
+        if (artes) entry.artes = artes;
+      } catch (error) {
+        console.error(brand.label + ' (artes): ' + error);
+        entry.artes = Object.assign({ piezas: {} }, before && before.artes, { error: 'No se pudo leer la carpeta 06 Artes.' });
       }
       if (metaToken_()) readMeta_(brand, entry, before);
       return entry;
@@ -399,6 +412,90 @@ function toNumber_(value) {
   return Number.isFinite(number) ? number : 0;
 }
 
+// ── Artes: la pieza de cada anuncio ──────────────────────────────────────────
+// Carpeta "06 Artes" de la marca, al lado de su carpeta de descargas, o la de la propiedad ARTES_FOLDER_<MARCA>.
+// Dentro, una subcarpeta por objetivo y mes ("Mex Interaccion - Octubre") con la pieza de cada anuncio: el video o la
+// imagen con el texto del anuncio como nombre, y para un carrusel una subcarpeta "<nombre> (Carrusel)" con sus laminas.
+// Devuelve { piezas: { "<clave>": { tipo, nombre, id | laminas } } } o null si la marca no tiene la carpeta. La clave
+// es la de arteKey() del tablero (sin extension, sin "(Carrusel)", sin tildes ni signos), que tambien empareja un
+// archivo con el inicio del texto del anuncio. La misma pieza repetida en varias subcarpetas cuenta una vez.
+const CARRUSEL_RE = /\s*\((carrusel|carousel)\)\s*$/i;
+const ARTES_NAME_RE = /^\s*(\d+\s*)?artes\s*$/i;
+
+function arteKey_(name) {
+  return String(name || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(CARRUSEL_RE, '')
+    .replace(/\.[A-Za-z0-9]{2,5}$/, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function artesFolder_(brand) {
+  const id = String(PropertiesService.getScriptProperties().getProperty(brand.artes) || '').trim();
+  if (id) return DriveApp.getFolderById(id);
+  const parents = DriveApp.getFolderById(folderId_(brand.data)).getParents();
+  while (parents.hasNext()) {
+    const siblings = parents.next().getFolders();
+    while (siblings.hasNext()) {
+      const folder = siblings.next();
+      if (!folder.isTrashed() && ARTES_NAME_RE.test(folder.getName())) return folder;
+    }
+  }
+  return null;
+}
+
+// Los videos e imagenes sueltos de una carpeta, como piezas de un solo archivo.
+function addArtesOf_(folder, piezas) {
+  const files = folder.getFiles();
+  while (files.hasNext()) {
+    const file = files.next();
+    if (file.isTrashed()) continue;
+    const mime = String(file.getMimeType() || '');
+    const tipo = mime.indexOf('video/') === 0 ? 'video' : mime.indexOf('image/') === 0 ? 'imagen' : '';
+    const clave = arteKey_(file.getName());
+    if (!tipo || !clave || piezas[clave]) continue;
+    piezas[clave] = { tipo: tipo, nombre: file.getName().trim(), id: file.getId() };
+  }
+}
+
+// Las laminas no traen numero en el nombre: van en orden alfabetico.
+function addCarrusel_(folder, piezas) {
+  const clave = arteKey_(folder.getName());
+  if (!clave || piezas[clave]) return;
+  const laminas = [];
+  const files = folder.getFiles();
+  while (files.hasNext()) {
+    const file = files.next();
+    if (!file.isTrashed() && String(file.getMimeType() || '').indexOf('image/') === 0) laminas.push({ id: file.getId(), nombre: file.getName() });
+  }
+  if (!laminas.length) return;
+  laminas.sort((a, b) => (a.nombre < b.nombre ? -1 : a.nombre > b.nombre ? 1 : 0));
+  piezas[clave] = { tipo: 'carrusel', nombre: folder.getName().replace(CARRUSEL_RE, '').trim(), laminas: laminas.map(lamina => lamina.id) };
+}
+
+function readArtes_(brand) {
+  const root = artesFolder_(brand);
+  if (!root) return null;
+  const piezas = {};
+  addArtesOf_(root, piezas);
+  const subs = root.getFolders();
+  while (subs.hasNext()) {
+    const sub = subs.next();
+    if (sub.isTrashed()) continue;
+    if (CARRUSEL_RE.test(sub.getName())) {
+      addCarrusel_(sub, piezas);
+      continue;
+    }
+    addArtesOf_(sub, piezas);
+    const inner = sub.getFolders();
+    while (inner.hasNext()) {
+      const folder = inner.next();
+      if (!folder.isTrashed() && CARRUSEL_RE.test(folder.getName())) addCarrusel_(folder, piezas);
+    }
+  }
+  return { piezas: piezas };
+}
+
 function readReports_(brand) {
   const folder = DriveApp.getFolderById(folderId_(brand.reports));
   const files = folder.getFiles();
@@ -489,9 +586,10 @@ function recentMonthKeys_(count) {
   return keys;
 }
 
-// El enlace de vista previa de la descarga trae el ID del anuncio (facebook.com/?feed_demo_ad=<id>).
+// El enlace de vista previa de la descarga trae el ID del anuncio (facebook.com/?feed_demo_ad=<id>); el
+// de las hojas que escribe la API (meta-api-sync.gs) lo lleva al final, despues de # (fb.me/...#feed_demo_ad=<id>).
 function adIdOf_(url) {
-  const match = String(url || '').match(/[?&]feed_demo_ad=(\d+)/);
+  const match = String(url || '').match(/[?&#]feed_demo_ad=(\d+)/);
   return match ? match[1] : '';
 }
 

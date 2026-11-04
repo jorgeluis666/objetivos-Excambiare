@@ -45,6 +45,28 @@
     { key: 'gold-fusion', label: 'Gold Fusion' },
   ];
   const BRAND_KEY = 'excambiare-brand';
+  // Modo equipo: los avisos internos (el recuadro "Antes de descargar el PDF") no los ve el cliente. Se activa abriendo
+  // el tablero con ?equipo=1, queda recordado en ese navegador y se apaga con ?equipo=0. El parametro se borra de la
+  // barra de direcciones para que un enlace copiado no lo lleve.
+  const TEAM_KEY = 'excambiare-equipo';
+  const TEAM_MODE = (() => {
+    let flag = null;
+    try {
+      const url = new URL(window.location.href);
+      flag = url.searchParams.get('equipo');
+      if (flag != null) {
+        url.searchParams.delete('equipo');
+        window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+      }
+    } catch {}
+    try {
+      if (flag === '1') window.localStorage.setItem(TEAM_KEY, '1');
+      if (flag === '0') window.localStorage.removeItem(TEAM_KEY);
+      return flag === '1' || (flag !== '0' && window.localStorage.getItem(TEAM_KEY) === '1');
+    } catch {
+      return flag === '1';
+    }
+  })();
 
   // El objetivo se deduce del nombre de la campana ("Campaña de mensajes | LR"). Es la agrupacion
   // del reporte: cada objetivo mide su propio resultado y los resultados no se suman entre objetivos.
@@ -543,11 +565,12 @@
   }
 
   // Tramo del mes y tramo equivalente del mes anterior, como en el reporte ("1-20 Sep vs 1-20 Ago").
-  // Un mes cerrado se compara completo contra el mes anterior completo.
+  // Un mes cerrado se compara completo contra el mes anterior completo. El periodo empieza siempre el dia 1, aunque la
+  // pauta arranque el 2 o el 3 (Meta no exporta los dias sin entrega): asi lo leen todas las marcas.
   function period(month) {
     if (!month || !month.hasData) return null;
     const closed = month.complete || month.past;
-    const from = closed ? 1 : month.firstDay;
+    const from = 1;
     const to = closed ? month.daysInMonth : month.lastDay;
     const prev = previousMonth(month);
     let compare = null;
@@ -562,12 +585,12 @@
       to,
       closed,
       rows: rowsBetween(month, from, to),
-      label: rangeLabel(month, month.firstDay && month.firstDay > from ? month.firstDay : from, Math.min(to, month.lastDay || to)),
+      label: rangeLabel(month, from, Math.min(to, month.lastDay || to)),
       compare,
     };
   }
 
-  // Vista anual: todos los meses del año con descarga ("26 Agosto - 13 Octubre"). No hay descargas del año
+  // Vista anual: todos los meses del año con descarga ("1 Enero - 31 Octubre"). No hay descargas del año
   // anterior, asi que no lleva comparacion. Sin año, el del ultimo mes con datos.
   function yearPeriod(year) {
     const target = year == null ? state.data?.year : Number(year);
@@ -582,7 +605,7 @@
       year: target,
       closed: last.month === 12 && last.complete,
       rows: months.flatMap(month => month.rows),
-      label: `${first.firstDay} ${first.name} - ${last.lastDay} ${last.name}`,
+      label: `1 ${first.name} - ${last.lastDay} ${last.name}`,
       compare: null,
     };
   }
@@ -625,6 +648,53 @@
     return creatives;
   }
 
+  // Piezas de la carpeta "06 Artes" de la marca en Drive (las sube el equipo, una subcarpeta por objetivo y mes):
+  // { piezas: Map(clave -> { tipo, nombre, id | laminas }) }. Solo pasan ids de Drive: van a la URL de la miniatura y
+  // al reproductor de Drive.
+  function normalizeArtes(raw) {
+    const piezas = new Map();
+    const driveId = value => /^[A-Za-z0-9_-]{10,}$/.test(String(value || ''));
+    const source = raw && raw.piezas && typeof raw.piezas === 'object' ? raw.piezas : {};
+    Object.entries(source).forEach(([key, item]) => {
+      if (!/^[a-z0-9]+$/.test(key) || !item || typeof item !== 'object') return;
+      const tipo = ['video', 'imagen', 'carrusel'].includes(item.tipo) ? item.tipo : '';
+      const id = driveId(item.id) ? String(item.id) : '';
+      const laminas = Array.isArray(item.laminas) ? item.laminas.filter(driveId).map(String) : [];
+      if (!tipo || (!id && !laminas.length)) return;
+      piezas.set(key, { tipo, nombre: String(item.nombre || ''), id, laminas });
+    });
+    return { piezas, error: raw?.error ? String(raw.error) : '' };
+  }
+
+  // Misma clave que arteKey_() del Apps Script: sin extension, sin "(Carrusel)", sin tildes ni signos.
+  const arteKey = name => String(name || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/\s*\((carrusel|carousel)\)\s*$/i, '')
+    .replace(/\.[A-Za-z0-9]{2,5}$/, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const ARTE_MIN_KEY = 10;
+
+  // La pieza de un anuncio por su nombre. El archivo suele llevar el inicio del texto del anuncio ("La prueba de
+  // fuego.mp4" para "La prueba de fuego: Solo un MEX") o el anuncio va recortado ("3 spots en Lima"): si no hay clave
+  // igual vale la que empiece igual, con al menos 10 letras en comun, y gana la que mas comparte.
+  function arteOf(name, data = state.data) {
+    const piezas = data?.artes?.piezas;
+    const key = arteKey(name);
+    if (!piezas?.size || !key) return null;
+    if (piezas.has(key)) return piezas.get(key);
+    let best = null;
+    let shared = 0;
+    piezas.forEach((pieza, candidate) => {
+      const common = Math.min(candidate.length, key.length);
+      if (common < ARTE_MIN_KEY || common <= shared) return;
+      if (key.startsWith(candidate) || candidate.startsWith(key)) {
+        best = pieza;
+        shared = common;
+      }
+    });
+    return best;
+  }
+
   // Seguidores de Instagram por mes ('yyyy-MM'), con el total al ultimo barrido. null sin token o sin la cuenta.
   function normalizeInstagram(raw) {
     if (!raw || typeof raw !== 'object') return null;
@@ -660,6 +730,7 @@
       }, source);
       data.brandError = raw.error ? String(raw.error) : '';
       data.creatives = normalizeCreatives(raw.creatives);
+      data.artes = normalizeArtes(raw.artes);
       data.instagram = normalizeInstagram(raw.instagram);
       data.metaError = raw.metaError ? String(raw.metaError) : '';
       return { ...brand, data };
@@ -861,7 +932,7 @@
       if (node) node.textContent = value || '—';
     };
     set('status-data', month && month.lastDay
-      ? `${month.firstDay || 1}-${month.lastDay} ${month.name} ${month.year}`
+      ? `1-${month.lastDay} ${month.name} ${month.year}`
       : (data ? 'Sin descargas con gasto' : (state.error ? 'Sin datos' : 'Cargando...')));
     set('status-last', data?.sweptAt ? `${SWEEP_ORIGINS[data.origin] || 'barrido'} · ${formatStamp(data.sweptAt)}` : 'sin registro');
     renderNextSweep();
@@ -917,7 +988,34 @@
     document.addEventListener('keydown', event => { if (event.key === 'Escape') close(); });
   }
 
+  // Aviso de version nueva. El tablero queda abierto dias enteros (los datos se releen solos cada hora) y una pestaña
+  // vieja seguia generando el reporte con el codigo anterior. El build publica version.json (solo la version, sin
+  // datos); si no es la de esta pagina (la etiqueta del panel lateral) aparece un aviso para recargar. En desarrollo no
+  // hay version.json y no pasa nada.
+  async function checkVersion() {
+    const current = (document.querySelector('.app-version')?.textContent || '').trim();
+    if (!current || document.getElementById('update-banner')) return;
+    try {
+      const response = await fetch('version.json', { cache: 'no-store' });
+      if (!response.ok) return;
+      const latest = String((await response.json())?.version || '').trim();
+      if (!/^v\d+\.\d+\.\d+$/.test(latest) || latest === current) return;
+      const banner = document.createElement('div');
+      banner.id = 'update-banner';
+      banner.className = 'update-banner';
+      banner.setAttribute('role', 'status');
+      banner.innerHTML = `<span>Hay una versión nueva del tablero (${esc(latest)}). Recarga antes de generar el reporte.</span><button type="button">Recargar</button>`;
+      banner.querySelector('button').addEventListener('click', () => window.location.reload());
+      document.body.appendChild(banner);
+    } catch {
+      // Sin conexion o sin version.json: se vuelve a mirar en la proxima vuelta.
+    }
+  }
+
   async function init() {
+    checkVersion();
+    setInterval(checkVersion, POLL_MS);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) checkVersion(); });
     // El unico boton Actualizar vive en la barra superior, junto al estado de los datos.
     refreshButtons().forEach(button => button.addEventListener('click', () => refresh({ fresh: true })));
     wireStatusCard();
@@ -959,6 +1057,8 @@
     latestMonth: () => monthByKey(state.data?.latestKey),
     formatStamp,
     limaParts,
+    teamMode: () => TEAM_MODE,
+    arteOf,
     metrics: { hasActivity, summarize, objectives, campaigns, adSets, ads, dailyValues, cumulative, period, yearPeriod, change },
     fmt,
     CURRENCY,

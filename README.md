@@ -5,7 +5,7 @@ de Inversiones Excambiare: **Sol y Tierra**, **Mex Cream** y **Gold Fusion**. Ca
 descargas y su carpeta de reportes; el tablero las muestra por separado (los resultados de una marca no se suman con
 los de otra). Montos en soles (`CURRENCY` en `js/data-source.js`).
 
-Version actual: `v2.8.1` (v1.x era el tablero anterior, sobre una hoja manual).
+Version actual: `v2.9.0` (v1.x era el tablero anterior, sobre una hoja manual).
 
 ## Versionado
 
@@ -33,8 +33,10 @@ La version vive en tres lugares: `package.json`, la etiqueta del panel lateral (
   - Pestanas de Enero a Diciembre y una pestana Anual con todos los meses con descarga.
   - Resumen del periodo: inversion, impresiones, alcance, frecuencia y CPM, con la variacion contra el mismo tramo
     del mes anterior (un mes cerrado se compara completo). En la vista Anual, promedio mensual de los meses cerrados.
+    El periodo empieza siempre el dia 1 ("1-31 Octubre"), aunque la pauta arranque el 2 o el 3, en todas las marcas.
   - Distribucion de la inversion por campana y un cuadro por objetivo (Interaccion, Reconocimiento, Trafico al
-    perfil, Conversaciones IG...) con sus KPIs, su grafico, sus conjuntos de anuncios y sus anuncios.
+    perfil, Conversaciones IG...) con sus KPIs, su grafico, sus conjuntos de anuncios y sus anuncios. La tabla de
+    anuncios va plegada ("Ver N anuncios"); abierta o plegada se recuerda por objetivo.
   - Grafico de cada cuadro: `Por dia` o `Por mes` (sin acumulado del mes: siempre sube y exagera el crecimiento)
     e indicadores resultado, inversion, impresiones, alcance y costo por resultado (inversion / resultados de cada
     dia o mes; un dia sin resultados queda como hueco). Cada punto lleva su valor (si dos etiquetas chocan, una baja
@@ -42,8 +44,13 @@ La version vive en tres lugares: `package.json`, la etiqueta del panel lateral (
     con el boton `Un solo cuadro` todos juntos, un color por indicador y cada uno con su escala (sin eje: el valor
     va en el punto); uno solo va contra el mes anterior en el mismo dia. Indicadores, vista y un solo cuadro se
     recuerdan por objetivo.
+  - Filtro de periodo en cada grafico: `Periodo [1 Oct] al [31 Oct]` en la vista Por dia y `[Enero] a [Diciembre]`
+    en Por mes, con "Todo el mes / Todo el año" para volver. Solo recorta el grafico (los KPIs siguen siendo del
+    mes) y queda en memoria por objetivo y vista mientras no se recargue la pagina ni se cambie de marca.
 - Anuncios: el mejor anuncio de cada objetivo (mas resultados y, a igual cantidad, menor costo por resultado) y la
-  tabla de todos los anuncios del periodo con filtro por objetivo, densidad compacta y pantalla completa.
+  tabla de todos los anuncios del periodo con filtro por objetivo, densidad compacta y pantalla completa. Como en
+  Terminal Pesquero, cada anuncio lleva la miniatura de su pieza y la tarjeta del mejor anuncio la muestra en grande:
+  un video se reproduce ahi mismo (reproductor de Drive) y un carrusel pasa de lamina con cada clic (ver "Artes").
 - Proyecciones: cierre de mes estimado por objetivo (resultados y gasto). Si el ultimo mes con datos ya termino,
   muestra su cierre real.
 - Calculadora de Inversion: facturacion objetivo, ventas necesarias e inversion en mensajes por CPL.
@@ -62,6 +69,35 @@ directorio guardado sigue en el repositorio por si hace falta recuperarlo.
 
 La fuente son las descargas de Meta Ads ("Raw Data Report": una fila por dia x edad x sexo x anuncio), una por mes en
 la carpeta de Drive de cada marca.
+
+### Hojas automaticas desde la API de Meta
+
+Las hojas mensuales no tienen por que subirse a mano: las puede escribir el alimentador de Meta que ya usan Royal
+Baby, Amador y Terminal Pesquero, [`scripts/meta-api-sync.gs` del repositorio de Royal Baby](https://github.com/jorgeluis666/objetivo-ventas-RB/blob/main/scripts/meta-api-sync.gs),
+con los perfiles `mex-cream`, `gold-fusion` y `sol-y-tierra`. Escribe en la carpeta `01 Meta Ads` de cada marca una
+hoja con las mismas columnas que la descarga (con edad y sexo, para que el alcance se sume igual), a las 6:00, 13:00
+y 18:00 de Lima; este barrido la lee sin saber que cambio el origen.
+
+- **Resultados:** salen del campo `results` de la API, que es la columna "Resultados" del Administrador (ThruPlay,
+  interacciones con la publicacion, visitas al perfil de Instagram, conversaciones), con la misma etiqueta de "Tipo
+  de resultado" que la descarga.
+- **Descargas subidas a mano:** no las pisa. Escribe el mes en curso, los meses sin archivo y los que escribio el
+  mismo (lo anota en la descripcion del archivo). Para cambiar una descarga manual por la de la API (por ejemplo
+  "Sol y Tierra - Octubre 2026", que trajo filas de Gold Fusion), propiedad `MES_A_REEMPLAZAR` y `reemplazarMes`.
+- **Meses que faltan:** `llenarMesesFaltantes` crea los de enero al mes anterior que no tengan hoja (abril y
+  septiembre de 2026); uno solo con la propiedad `MES_A_LLENAR` y `sincronizarMes`.
+- **Seguidores por anuncio:** la columna "Seguimientos de Instagram" solo se escribe con la propiedad
+  `ACCION_SEGUIDORES`, porque Meta no documenta esa accion: `verAcciones` lista las que devuelve la cuenta para elegir
+  la que coincide con la descarga. Sin ella, esos meses salen sin seguidores de pauta en el reporte.
+- **Enlace de vista previa:** lleva el ID del anuncio al final (`#feed_demo_ad=<id>`), que `adIdOf` lee igual que el
+  `?feed_demo_ad=` de la descarga.
+- Interacciones (reproducciones de 3 s, reacciones, guardados, compartidos, comentarios): acciones documentadas de
+  Meta. Pueden no coincidir con las descargas antiguas (en octubre de 2026 la API daba mas reacciones que la
+  descarga de Mex Cream).
+
+Puesta en marcha, un proyecto de Apps Script por marca: pegar el archivo, propiedades `PERFIL`, `META_TOKEN`,
+`META_ACCOUNT_ID` y `META_FOLDER_ID` (los IDs nunca van en el repo), ejecutar `sincronizarMeta` una vez para autorizar,
+`llenarMesesFaltantes` para septiembre y `instalarDisparadores`.
 
 - Cada archivo puede ser una Hoja de calculo de Google o un `.xlsx`. El `.xlsx` se lee con una copia temporal
   convertida (servicio avanzado Drive API del Apps Script) que se manda a la papelera al terminar.
@@ -111,8 +147,8 @@ y acentos en azul. No sigue a la marca elegida arriba: lleva MEX (Mex Cream), Go
 | --- | --- |
 | Portada | Logo de Lima Retail, "Reporte de Publicidad", cliente, marcas y periodo. |
 | Resumen ejecutivo | Inversion total, alcance, seguidores de pauta y costo por seguidor con su variacion; tabla marca x objetivo (inversion, resultados y costo por resultado con su variacion y la lectura: mejoro o empeoro, por los artes o por el CPM); "Lectura del mes". |
-| Crecimiento de seguidores | Nuevos, bajas, netos, de pauta y costo por seguidor con su variacion; tabla por marca (nuevos, bajas, netos, de pauta, organico, inversion de trafico, costo por seguidor); "Clave". |
-| Evolucion de seguidores | Seguidores de pauta y costo por seguidor por mes y por marca (ultimos 4 meses), tabla mes a mes y "Evolucion" (que movio el costo: mas o menos seguidores o mas o menos inversion). |
+| Crecimiento de seguidores | Seguidores totales, nuevos, bajas, netos, de pauta y costo por seguidor con su variacion; tabla por marca (total, nuevos, bajas, netos, de pauta, organico, inversion de trafico, costo por seguidor); "Clave". |
+| Evolucion de seguidores | Tres graficos por mes y por marca (ultimos 4 meses): seguidores totales, seguidores nuevos de pauta y costo por seguidor; tabla mes a mes con el total de cada mes (se escribe ahi mismo) y debajo pauta · costo; "Evolucion" (cuanto crecio cada cuenta y que movio el costo: mas o menos seguidores o mas o menos inversion). |
 | Por marca y objetivo: evolucion | 6 KPIs con su variacion contra el mes anterior con datos (inversion, resultados, costo por resultado, CPM, alcance —en Trafico al perfil, seguidores— y resultados por mil impresiones); grafico de inversion, resultados y costo por mes con el valor en cada punto (un mes sin datos queda marcado); tabla mes a mes con la comparacion contra el promedio de los meses anteriores; "Por que cambio". |
 | Por marca y objetivo: artes | Hasta 6 artes con miniatura (o el icono de su formato), formato, nuevo, inversion, resultados, costo, comparacion contra el promedio y veredicto (Replicar, Mantener, Ajustar, Renovar, Descartar, Poca data); en Interaccion, el desglose de cada arte (solo las columnas que trae la descarga); en Trafico, los seguidores y el costo por seguidor de cada arte; resultado por formato y "Que funciona" (el mejor arte, el mas eficiente, el que hay que cortar, nuevos contra los que siguieron y el formato, por importancia hasta lo que cabe en la lamina). |
 | Conclusiones | Seguidores, artes para replicar (y el formato que domina) y que movio los costos; nota del periodo. |
@@ -137,14 +173,24 @@ y acentos en azul. No sigue a la marca elegida arriba: lleva MEX (Mex Cream), Go
   imagen) y la miniatura. Sin el, se deduce de las reproducciones de 3 s: Video o Estatico.
 - **Seguidores:** de pauta = seguidores que trajeron los anuncios de todas las campañas (columna Seguimientos de
   Instagram); costo por seguidor = inversion de Trafico al perfil ÷ seguidores de pauta; netos = nuevos − bajas;
-  organico = nuevos − pauta (sin descontar bajas). Nuevos y bajas llegan de Instagram si el Web App esta conectado; si
-  no, se escriben con un clic en la tabla de seguidores (por marca y por mes) y lo escrito gana sobre Instagram. Las
+  organico = nuevos − pauta (sin descontar bajas). Total, nuevos y bajas llegan de Instagram si el Web App esta
+  conectado; si no, se escriben con un clic en la tabla de seguidores (por marca y por mes) y lo escrito gana sobre
+  Instagram. Salen de Meta Business Suite > Estadisticas > Publico > Tendencias, con la cuenta de Instagram y el mes
+  completo: Total = Seguidores (total), Nuevos = Seguimientos, Bajas = Personas que dejaron de seguirte. El total de
+  los meses anteriores se escribe en la tabla de la lamina de evolucion (cada celda guarda en su mes). Las
   cifras quedan guardadas en el navegador junto con los textos (`excambiare-report-notes-v2`); "Restablecer textos"
   no las borra.
 - **Antes de descargar el PDF:** un recuadro (que no sale en el PDF) avisa lo que falta o esta mal en los datos: un
   mes sin descarga en la carpeta, una descarga que no se pudo leer o que no llega al ultimo dia del mes, una descarga
   sin la columna de seguidores, el mismo anuncio (mismo ID de Meta) en las descargas de dos marcas (una trae filas de
-  la otra), y si faltan los nuevos y bajas o el token de Meta.
+  la otra), y si faltan los nuevos y bajas o las miniaturas de los artes. El cliente tambien abre el tablero, asi que
+  el recuadro solo sale en **modo equipo**: abrir el tablero una vez con `?equipo=1` al final de la direccion (queda
+  recordado en ese navegador; la direccion se limpia sola) y apagarlo con `?equipo=0`.
+- **Artes:** la miniatura de cada arte sale de su pieza en "06 Artes" (ver "Artes") o, con token, de Meta; el formato
+  (video, imagen, carrusel) tambien.
+- **Version nueva:** el build publica `version.json` (solo la version, sin datos). Si una pestaña abierta tiene otra
+  version, el tablero muestra abajo "Hay una version nueva del tablero" con el boton Recargar (lo revisa al abrir,
+  cada hora y al volver a la pestaña). Asi nadie genera el reporte con el codigo de antes.
 - **Textos:** "Lectura del mes", "Clave", "Evolucion", "Por que cambio", "Que funciona", las conclusiones y los
   proximos pasos vienen propuestos con lo que dicen los numeros y se editan con un clic sobre la lamina (`**texto**`
   va en negrita).
@@ -186,6 +232,23 @@ cada barrido diario las vuelve a pedir. Un error de Meta deja lo del barrido ant
   `pages_read_engagement`. Nunca va en el repo.
 - Despues de poner las propiedades, ejecutar `probarMeta()` en el editor: muestra cuantos artes trajo con miniatura
   y los seguidores de cada mes, sin guardar nada.
+
+## Artes
+
+Cada marca tiene en Drive, junto a su carpeta de descargas (`01 Meta Ads`), la carpeta `06 Artes`: una subcarpeta
+por objetivo y mes (`Mex Interaccion - Octubre`) con la pieza de cada anuncio. El barrido la encuentra sola (o usa la
+propiedad `ARTES_FOLDER_<MARCA>` si la carpeta esta en otro lugar) y manda el ID de Drive de cada pieza (`artes`).
+
+- Nombre del archivo: el texto del anuncio, entero o su comienzo (`La prueba de fuego.mp4` sirve para el anuncio
+  "La prueba de fuego: Solo un MEX"). Se comparan sin tildes, signos ni mayusculas; si no hay uno igual vale el que
+  empiece igual con al menos 10 letras en comun. Un nombre con errores (`ero floro, pura previa.png` para "Cero
+  floro, pura previa") no encuentra su anuncio.
+- Video o imagen sueltos; un carrusel va en una subcarpeta `<texto del anuncio> (Carrusel)` con sus laminas, que se
+  muestran en orden alfabetico.
+- La carpeta va compartida como **"Cualquier persona con el enlace: Lector"**: la miniatura y el video los pide a
+  Drive el navegador de quien mira el tablero. Sin compartir, Drive los rechaza y el tablero los quita (el anuncio
+  queda con su nombre solo).
+- Una pieza nueva aparece con el barrido diario o con **Actualizar**.
 
 ## Calculadora de Inversion
 
@@ -234,6 +297,7 @@ esa cuenta pierde el acceso, el barrido se detiene.
 | --- | --- |
 | Carpetas de descargas de Meta y de reportes | Propiedades del script `DATA_FOLDER_<MARCA>` y `REPORTS_FOLDER_<MARCA>` |
 | Token de Meta y cuentas de Instagram (opcional) | Propiedades del script `META_TOKEN` e `IG_USER_<MARCA>` |
+| Carpeta de artes (solo si no es la `06 Artes` junto a las descargas) | Propiedad del script `ARTES_FOLDER_<MARCA>` |
 | URL del Web App | secret de GitHub `DATA_ENDPOINT` |
 | Clave de acceso al tablero | secret de GitHub `DASHBOARD_PASSWORD` |
 | Logo y favicon | `assets/logo-excambiare.png`, `assets/favicon.png` |

@@ -161,6 +161,9 @@ async function main() {
   fs.copyFileSync(path.join(ROOT, 'CNAME'), path.join(DIST_DIR, 'CNAME'));
   // El tablero no se indexa: la pantalla de acceso ya trae noindex y esto cubre el resto del sitio.
   fs.writeFileSync(path.join(DIST_DIR, 'robots.txt'), 'User-agent: *\nDisallow: /\n', 'utf8');
+  // Solo la version (sin datos): una pestaña abierta con una version anterior la compara y avisa que hay que recargar.
+  const { version } = JSON.parse(readFile('package.json'));
+  fs.writeFileSync(path.join(DIST_DIR, 'version.json'), JSON.stringify({ version: `v${version}` }), 'utf8');
 
   console.log(`[build] escrito dist/index.html (${(fs.statSync(DIST_HTML).size / 1024).toFixed(1)} KB)`);
 }

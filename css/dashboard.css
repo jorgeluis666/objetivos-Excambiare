@@ -452,6 +452,122 @@ select {
   white-space: nowrap;
 }
 
+/* La pieza del anuncio, de "06 Artes" en Drive (o la miniatura de Meta). Vertical (4:5) porque casi todas son reels.
+   Si Drive no la sirve, objectives.js la quita y el nombre queda solo. */
+.ad-thumb {
+  width: 28px;
+  height: 35px;
+  margin-right: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  object-fit: cover;
+  vertical-align: middle;
+  background: #f8fafc;
+}
+
+/* La pieza grande, debajo de las cifras de cada tarjeta de "Mejor anuncio de cada objetivo". Como en Terminal Pesquero. */
+.ad-top-card:has(.ad-top-arte) {
+  flex-wrap: wrap;
+  align-content: flex-start;
+}
+
+.ad-top-arte {
+  flex-basis: 100%;
+  min-width: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.ad-arte-media {
+  position: relative;
+  display: grid;
+  width: 100%;
+  max-width: 230px;
+  margin: 0 auto;
+  aspect-ratio: 9 / 16;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #0f172a;
+}
+
+.ad-arte-media > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* El reproductor de Drive se pinta a 360x640 y objectives.js lo escala al ancho del marco. */
+.ad-arte-player {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 0;
+  transform-origin: 0 0;
+}
+
+.ad-arte-poster {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.ad-arte-poster img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ad-arte-poster:focus-visible {
+  outline: 3px solid var(--brand-border);
+  outline-offset: -3px;
+}
+
+.ad-arte-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  padding-left: 3px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, .72);
+  color: #fff;
+  font-size: 17px;
+  transform: translate(-50%, -50%);
+  transition: background .15s ease;
+}
+
+.ad-arte-poster:hover .ad-arte-play {
+  background: var(--brand);
+}
+
+/* Carrusel: en vez del play, la lamina en la que va. El clic pasa a la siguiente. */
+.ad-arte-slide-count {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, .72);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  transition: background .15s ease;
+}
+
+.ad-arte-poster.is-carrusel:hover .ad-arte-slide-count {
+  background: var(--brand);
+}
+
 .date-col {
   white-space: nowrap;
   font-size: 10px;
@@ -2099,9 +2215,11 @@ body.modal-open {
   box-shadow: 1px 0 0 #cbd5e1, 9px 0 11px -8px rgba(15, 23, 42, .45), inset 0 -1px 0 var(--border);
 }
 
+/* inline-block: con la miniatura del arte al lado, el nombre sigue en la misma linea. */
 .campaigns-table .ad-name-text {
-  display: block;
+  display: inline-block;
   max-width: 220px;
+  vertical-align: middle;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2279,10 +2397,177 @@ body.excambiare-table-fullscreen {
   letter-spacing: 0;
 }
 
-/* Minimizado quedan el titulo y los KPIs; se ocultan grafico, conjuntos y la vista del grafico. */
+/* Minimizado quedan el titulo y los KPIs; se ocultan grafico, conjuntos, la vista y el periodo del grafico. */
 .campaign-block.is-collapsed .campaign-block-body,
-.campaign-block.is-collapsed [data-campaign-modes] {
+.campaign-block.is-collapsed [data-campaign-modes],
+.campaign-block.is-collapsed [data-campaign-range] {
   display: none;
+}
+
+/* Aviso de version nueva (data-source.js): abajo al centro, sobre todo lo demas, hasta que se recargue. */
+.update-banner {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 12px 10px 18px;
+  border: 1px solid var(--brand-border);
+  border-radius: 12px;
+  color: var(--brand-text);
+  background: var(--brand-soft);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, .16);
+  font-size: 13px;
+  font-weight: 600;
+  transform: translateX(-50%);
+}
+
+.update-banner button {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border: 1px solid var(--brand);
+  border-radius: 8px;
+  color: #fff;
+  background: var(--brand);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.update-banner button:hover {
+  background: var(--brand-dark);
+}
+
+@media print {
+  .update-banner {
+    display: none;
+  }
+}
+
+/* Periodo del grafico de cada campana: "Periodo [1 Oct] al [31 Oct]" junto a Por dia / Por mes. */
+.chart-range {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.chart-range-label {
+  color: #94a3b8;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.chart-range select {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #475569;
+  background: #fff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.chart-range select:focus-visible,
+.chart-range-reset:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.chart-range-reset {
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--brand-border);
+  border-radius: 999px;
+  color: var(--brand-text);
+  background: var(--brand-soft);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.chart-range-note {
+  color: #475569;
+  font-weight: 700;
+}
+
+/* Tabla de anuncios de cada cuadro, plegada por defecto: el encabezado entero la abre. */
+.campaign-ads > summary {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.campaign-ads > summary::-webkit-details-marker {
+  display: none;
+}
+
+.campaign-ads > summary:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.campaign-ads-action {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--brand-border);
+  border-radius: 999px;
+  color: var(--brand-text);
+  background: var(--brand-soft);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.campaign-ads > summary:hover .campaign-ads-action {
+  border-color: var(--brand);
+}
+
+.campaign-ads-action svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform: rotate(180deg);
+  transition: transform .15s ease;
+}
+
+.campaign-ads[open] .campaign-ads-action svg {
+  transform: none;
+}
+
+.campaign-ads .when-open,
+.campaign-ads[open] .when-closed {
+  display: none;
+}
+
+.campaign-ads[open] .when-open {
+  display: inline;
+}
+
+@media(max-width:640px) {
+  .campaign-ads > summary {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 .campaign-block.is-collapsed .chart-kpis {
@@ -2534,6 +2819,7 @@ body.excambiare-table-fullscreen {
 }
 
 .ad-top-body {
+  flex: 1 1 0;
   min-width: 0;
 }
 
@@ -4202,6 +4488,39 @@ button.topbar-pill[aria-expanded="true"] .status-chevron {
 .rp-split-even {
   grid-template-columns: 1fr 1fr;
   flex: none;
+}
+
+/* Evolucion de seguidores: total, de pauta y costo por seguidor en una fila. */
+.rp-split-3 {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 13px;
+  flex: none;
+}
+
+/* Un poco mas bajos que los dos de siempre: la tabla de abajo lleva dos lineas por celda. */
+.rp-charts-row.rp-split-3 {
+  height: 172px;
+}
+
+/* Bajo el total de cada mes: seguidores de pauta · costo por seguidor. Filas mas juntas para que entren con los
+   tres graficos y la tarjeta Evolucion. */
+.rp-cell-sub {
+  display: block;
+  margin-top: 1px;
+  color: var(--rp-muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.rp-followers-table td {
+  padding-top: 5px;
+  padding-bottom: 5px;
+  line-height: 1.25;
+}
+
+.rp-followers-table + .rp-table-foot {
+  padding-top: 7px;
+  padding-bottom: 7px;
 }
 
 /* Mejores anuncios de interaccion: solo el arte que lidera va en negrita. */

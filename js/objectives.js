@@ -71,6 +71,8 @@
     historyYear: null,
     historyStatus: 'todas',
     campaignCharts: readJson(CAMPAIGN_CHARTS_KEY),
+    // Periodo elegido en el grafico de cada campana: clave del objetivo -> { daily: {from, to}, monthly: {from, to} }.
+    chartRanges: new Map(),
     // Graficos de Chart.js vivos, uno por cuadro de campana (clave del objetivo).
     charts: new Map(),
     tabsHome: null,
@@ -171,6 +173,114 @@
     return url
       ? `<a class="ad-link" href="${url}" target="_blank" rel="noopener noreferrer" title="Ver el anuncio en Meta">${name}<span class="ad-link-ic" aria-hidden="true">&#8599;</span></a>`
       : name;
+  }
+
+  // ── La pieza del anuncio ─────────────────────────────────────────────────
+  // Como en Terminal Pesquero: la pieza que el equipo sube a la carpeta "06 Artes" de la marca en Drive (el barrido la
+  // lee y data().arteOf la busca por el nombre del anuncio). Sin pieza en Drive vale la miniatura de Meta, si el Web
+  // App tiene token. La miniatura de Drive la pide el navegador de quien mira el tablero: la carpeta tiene que estar
+  // compartida por enlace. Drive la rechaza si la peticion lleva el referer del tablero, de ahi el referrerpolicy; si
+  // aun asi no carga, la imagen se quita (wireArtes) y queda el nombre solo.
+  const ARTE_LABEL = { video: 'Video', imagen: 'Imagen', carrusel: 'Carrusel' };
+  // feed_demo_ad=<id> va en la consulta (descarga de Meta) o despues de # (hojas que escribe la API).
+  const adIdOf = url => (String(url || '').match(/[?&#]feed_demo_ad=(\d+)/) || [])[1] || '';
+  const driveThumb = (id, size) => `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&amp;sz=w${size}`;
+  const arteImg = src => `<img src="${src}" alt="" loading="lazy" referrerpolicy="no-referrer" data-arte-img>`;
+
+  // { tipo, nombre, id, laminas } de Drive o { tipo: 'meta', thumb } de Meta; null sin pieza.
+  function pieceOf(ad) {
+    const arte = data().arteOf(ad.ad);
+    if (arte) return arte;
+    const thumb = data().safeUrl(data().snapshot()?.creatives?.get(adIdOf(ad.preview))?.thumb);
+    return thumb ? { tipo: 'meta', nombre: ad.ad, thumb } : null;
+  }
+
+  // Miniatura chica junto al nombre en las tablas: un video trae su fotograma, un carrusel su primera lamina.
+  function arteThumb(ad) {
+    const piece = pieceOf(ad);
+    if (!piece) return '';
+    const cover = piece.tipo === 'meta' ? piece.thumb : driveThumb(piece.id || piece.laminas[0], 160);
+    const kind = ARTE_LABEL[piece.tipo] ? ` · ${ARTE_LABEL[piece.tipo]}` : '';
+    return `<img class="ad-thumb" src="${cover}" alt="" loading="lazy" referrerpolicy="no-referrer" data-arte-img title="${esc(piece.nombre)}${kind}">`;
+  }
+
+  // La pieza grande de las tarjetas de "Mejor anuncio de cada objetivo": la miniatura de Drive hace de portada y el
+  // reproductor se carga al hacer clic. Un carrusel muestra su primera lamina y el clic pasa a la siguiente. Solo se
+  // llama con pieza (renderTopAds): un anuncio sin pieza deja la tarjeta sin recuadro.
+  function arteMedia(ad) {
+    const piece = pieceOf(ad);
+    if (piece.tipo === 'meta') return `<div class="ad-arte-media">${arteImg(piece.thumb)}</div>`;
+    const laminas = piece.laminas;
+    if (piece.tipo === 'carrusel' && laminas.length > 1) {
+      return `<div class="ad-arte-media">
+          <button type="button" class="ad-arte-poster is-carrusel" data-slides="${esc(laminas.join(','))}" data-slide="0" aria-label="Siguiente lámina de ${esc(piece.nombre)}">
+            ${arteImg(driveThumb(laminas[0], 480))}<span class="ad-arte-slide-count" aria-hidden="true">1/${laminas.length}</span>
+          </button>
+        </div>`;
+    }
+    const id = piece.id || laminas[0];
+    // Una imagen no tiene nada que reproducir: se deja la pieza, sin boton.
+    if (piece.tipo !== 'video') return `<div class="ad-arte-media">${arteImg(driveThumb(id, 480))}</div>`;
+    return `<div class="ad-arte-media">
+        <button type="button" class="ad-arte-poster" data-arte="${esc(id)}" aria-label="Reproducir ${esc(piece.nombre)}">
+          ${arteImg(driveThumb(id, 480))}<span class="ad-arte-play" aria-hidden="true">&#9654;</span>
+        </button>
+      </div>`;
+  }
+
+  // Drive no deja reproducir sus videos fuera de su reproductor, y ese reproductor se descuadra en marcos angostos: se
+  // pinta a 360x640, donde encaja justo en 9:16, y se escala al ancho del marco (fitPlayers, tambien al cambiar el
+  // tamaño de la ventana).
+  const DRIVE_PLAYER = { width: 360, height: 640 };
+
+  function fitPlayers() {
+    document.querySelectorAll('.ad-arte-player').forEach(frame => {
+      const box = frame.parentElement;
+      if (box) frame.style.transform = `scale(${box.clientWidth / DRIVE_PLAYER.width})`;
+    });
+  }
+
+  function playArte(poster) {
+    const box = poster.closest('.ad-arte-media');
+    if (!box || !/^[A-Za-z0-9_-]{10,}$/.test(poster.dataset.arte || '')) return;
+    const frame = document.createElement('iframe');
+    frame.src = `https://drive.google.com/file/d/${encodeURIComponent(poster.dataset.arte)}/preview`;
+    frame.title = poster.getAttribute('aria-label') || 'Arte del anuncio';
+    frame.allow = 'autoplay; fullscreen';
+    frame.allowFullscreen = true;
+    frame.className = 'ad-arte-player';
+    frame.style.width = `${DRIVE_PLAYER.width}px`;
+    frame.style.height = `${DRIVE_PLAYER.height}px`;
+    poster.remove();
+    box.appendChild(frame);
+    fitPlayers();
+  }
+
+  function nextSlide(poster) {
+    const laminas = String(poster.dataset.slides || '').split(',').filter(Boolean);
+    if (laminas.length < 2) return;
+    const next = (Number(poster.dataset.slide || 0) + 1) % laminas.length;
+    poster.dataset.slide = String(next);
+    poster.querySelector('img').src = driveThumb(laminas[next], 480).replace('&amp;', '&');
+    poster.querySelector('.ad-arte-slide-count').textContent = `${next + 1}/${laminas.length}`;
+  }
+
+  function wireArtes() {
+    document.addEventListener('click', event => {
+      const poster = event.target.closest?.('.ad-arte-poster');
+      if (!poster) return;
+      if (poster.classList.contains('is-carrusel')) nextSlide(poster);
+      else playArte(poster);
+    });
+    // Una miniatura que Drive no sirve (carpeta sin compartir por enlace) o que Meta ya vencio se quita: en la tabla
+    // queda el nombre solo y la tarjeta se queda sin recuadro, en vez de un "sin arte" que no es cierto. El evento
+    // error no burbujea: se escucha en captura.
+    document.addEventListener('error', event => {
+      const image = event.target;
+      if (!(image instanceof HTMLImageElement) || !image.hasAttribute('data-arte-img')) return;
+      (image.closest('.ad-top-arte') || image).remove();
+    }, true);
+    window.addEventListener('resize', fitPlayers);
   }
 
   // Dias activos del anuncio: "3-18 Sep" en un mes, rango de fechas en la vista anual.
@@ -432,7 +542,8 @@
           tooltip: {
             filter: item => item.raw != null,
             callbacks: {
-              title: items => (modeKey === 'monthly' ? data().MONTHS[items[0].dataIndex] : `Día ${items[0].label}`),
+              // Por la etiqueta y no por la posicion: con un periodo recortado el primer punto no es Enero.
+              title: items => (modeKey === 'monthly' ? data().MONTHS[data().SHORT_MONTHS.indexOf(items[0].label)] : `Día ${items[0].label}`),
               label: context => ` ${context.dataset.label}: ${formatValue(context.dataset.unit, context.raw)}`,
             },
           },
@@ -574,6 +685,46 @@
       collapsed: saved.collapsed === true,
       // Varios indicadores en un solo cuadro (cada uno con su escala) en vez de paneles apilados.
       combined: saved.combined === true,
+      // La tabla de anuncios del cuadro, abierta o plegada (plegada por defecto).
+      adsOpen: saved.adsOpen === true,
+    };
+  }
+
+  // Periodo del grafico de cada campana: dias del mes (Por dia) o meses del año (Por mes). Va en memoria por objetivo y
+  // vista, no en el navegador: un rango de dias no sirve para otro mes. Al cambiar de mes se recorta a sus dias.
+  function chartRange(key, modeKey, month) {
+    const max = modeKey === 'monthly' ? 12 : month.daysInMonth;
+    const saved = state.chartRanges.get(key)?.[modeKey] || {};
+    const from = Math.min(Math.max(1, saved.from || 1), max);
+    const to = Math.min(Math.max(from, saved.to || max), max);
+    return { from, to, max, full: from === 1 && to === max };
+  }
+
+  function saveChartRange(key, modeKey, range) {
+    state.chartRanges.set(key, { ...(state.chartRanges.get(key) || {}), [modeKey]: range });
+  }
+
+  // "Periodo [1 Oct] al [31 Oct]" o "[Enero] a [Diciembre]", con "Todo el mes / Todo el año" si esta recortado.
+  function rangeHtml(range, modeKey, month, label) {
+    const monthly = modeKey === 'monthly';
+    const name = value => (monthly ? data().MONTHS[value - 1] : `${value} ${month.shortName}`);
+    const options = selected => Array.from({ length: range.max }, (_, index) => index + 1)
+      .map(value => `<option value="${value}"${value === selected ? ' selected' : ''}>${esc(name(value))}</option>`).join('');
+    return `
+      <span class="chart-range-label">Periodo</span>
+      <label><span class="sr-only">Desde (${esc(label)})</span><select data-range="from">${options(range.from)}</select></label>
+      <span class="chart-range-sep">${monthly ? 'a' : 'al'}</span>
+      <label><span class="sr-only">Hasta (${esc(label)})</span><select data-range="to">${options(range.to)}</select></label>
+      ${range.full ? '' : `<button type="button" class="chart-range-reset" data-range-reset>${monthly ? 'Todo el año' : 'Todo el mes'}</button>`}`;
+  }
+
+  // Deja solo los puntos del periodo elegido (labels y valores de cada linea, incluida la del mes anterior).
+  function sliceSeries(series, range) {
+    if (range.full) return series;
+    return {
+      ...series,
+      labels: series.labels.slice(range.from - 1, range.to),
+      datasets: series.datasets.map(dataset => ({ ...dataset, data: dataset.data.slice(range.from - 1, range.to) })),
     };
   }
 
@@ -628,8 +779,9 @@
       </div>`;
   }
 
-  // Anuncios del objetivo en el periodo, de mas a menos resultados, con la estrella en el lider.
-  function campaignAdsHtml(period, objective) {
+  // Anuncios del objetivo en el periodo, de mas a menos resultados, con la estrella en el lider. Van plegados: abiertos
+  // alargaban cada cuadro una fila por anuncio. Abierto o cerrado se recuerda por objetivo (adsOpen).
+  function campaignAdsHtml(period, objective, open) {
     const ofObjective = rows => rows.filter(row => row.group === objective.key);
     const ads = data().metrics.ads(ofObjective(period.rows)).sort((a, b) => (b.results - a.results) || (b.spend - a.spend));
     const previous = new Map((period.compare ? data().metrics.ads(ofObjective(period.compare.rows)) : []).map(ad => [ad.key, ad]));
@@ -645,7 +797,7 @@
       const share = objective.spend > 0 ? (ad.spend / objective.spend) * 100 : 0;
       return `
         <tr>
-          <td class="campaign-name campaign-ad-name" title="${esc(ad.ad)}">${index === 0 && ad.results > 0 ? '<b class="leader-star" title="Líder de la campaña">&#9733;</b> ' : ''}${adNameLink(ad)}</td>
+          <td class="campaign-name campaign-ad-name" title="${esc(ad.ad)}">${arteThumb(ad)}${index === 0 && ad.results > 0 ? '<b class="leader-star" title="Líder de la campaña">&#9733;</b> ' : ''}${adNameLink(ad)}</td>
           ${manySets ? `<td class="campaign-set-col">${esc(ad.adSets.join(' / ') || '—')}</td>` : ''}
           <td class="num"><b>${fmt('count', ad.results)}</b></td>
           ${compare ? `<td class="num">${before ? fmt('count', before.results) : '<span class="no-data">—</span>'}</td><td class="num">${variationCell(ad.results, before?.results)}</td>` : ''}
@@ -659,17 +811,23 @@
           <td class="date-col">${adDays(ad, period)}</td>
         </tr>`;
     }).join('') || `<tr><td class="table-empty" colspan="${head.length}">Sin anuncios con gasto en el periodo.</td></tr>`;
+    const count = `${ads.length} ${ads.length === 1 ? 'anuncio' : 'anuncios'}`;
     return `
-      <div class="adset-head">
-        <div class="panel-title">Anuncios</div>
-        <div class="panel-sub">${ads.length} ${ads.length === 1 ? 'anuncio' : 'anuncios'} con gasto o impresiones en ${esc(period.label)}${compare ? `. Resultados contra ${esc(period.compare.label)}` : ''}. La estrella marca al líder.</div>
-      </div>
-      <div class="table-scroll">
-        <table class="data-table adset-table campaign-ads-table">
-          <thead><tr>${head.map(([label, numeric]) => `<th${numeric ? ' class="num"' : ''}>${esc(label)}</th>`).join('')}</tr></thead>
-          <tbody>${body}</tbody>
-        </table>
-      </div>`;
+      <details class="campaign-ads" data-campaign-ads${open ? ' open' : ''}>
+        <summary class="adset-head campaign-ads-head">
+          <div>
+            <div class="panel-title">Anuncios</div>
+            <div class="panel-sub">${count} con gasto o impresiones en ${esc(period.label)}${compare ? `. Resultados contra ${esc(period.compare.label)}` : ''}. La estrella marca al líder.</div>
+          </div>
+          <span class="campaign-ads-action"><span class="when-closed">Ver ${count}</span><span class="when-open">Ocultar</span>${CHEVRON}</span>
+        </summary>
+        <div class="table-scroll">
+          <table class="data-table adset-table campaign-ads-table">
+            <thead><tr>${head.map(([label, numeric]) => `<th${numeric ? ' class="num"' : ''}>${esc(label)}</th>`).join('')}</tr></thead>
+            <tbody>${body}</tbody>
+          </table>
+        </div>
+      </details>`;
   }
 
   function campaignHtml(period, objective, before) {
@@ -688,6 +846,7 @@
             <div class="panel-sub">${esc(objective.campaigns.join(' / '))} | ${esc(period.label)}${esc(comparison)}</div>
           </div>
           <div class="chart-controls">
+            <div class="chart-range" data-campaign-range role="group" aria-label="Periodo del gráfico de ${esc(objective.label)}"></div>
             <div class="chart-series-toggles" data-campaign-modes role="radiogroup" aria-label="Vista del gráfico de ${esc(objective.label)}"></div>
             <button type="button" class="chart-toggle" data-campaign-toggle="${key}" aria-controls="campaign-body-${key}">${CHEVRON}</button>
           </div>
@@ -698,7 +857,7 @@
           <div class="chart-wrap h-300"><canvas role="img" aria-label="Gráfico de la campaña ${esc(objective.label)}"></canvas></div>
           <div class="chart-legend projection-legend" data-campaign-legend></div>
           ${adSetsHtml(period, objective)}
-          ${campaignAdsHtml(period, objective)}
+          ${campaignAdsHtml(period, objective, settings.adsOpen)}
         </div>
       </section>`;
   }
@@ -723,6 +882,8 @@
     block.classList.toggle('is-collapsed', settings.collapsed);
     setToggle(block.querySelector('[data-campaign-toggle]'), settings.collapsed, `la campaña ${objective.label}`);
     replaceHtml(block.querySelector('[data-campaign-modes]'), chipsHtml(modes, modeKey, `campaign-mode-${key}`, 'var(--brand-text)'));
+    const range = chartRange(key, modeKey, month);
+    replaceHtml(block.querySelector('[data-campaign-range]'), rangeHtml(range, modeKey, month, objective.label));
     // El boton de un solo cuadro aparece con dos o mas indicadores marcados.
     const combineButton = selected.length > 1
       ? `<button type="button" class="series-toggle campaign-chip campaign-combine${combined ? ' active' : ''}" data-campaign-combine aria-pressed="${combined}" title="${combined ? 'Volver a un panel por indicador' : 'Juntar los indicadores en un solo cuadro'}">Un solo cuadro</button>`
@@ -732,7 +893,13 @@
       destroyChart(key);
       return;
     }
-    const series = campaignSeries(selected, modeKey, month, combined);
+    const series = sliceSeries(campaignSeries(selected, modeKey, month, combined), range);
+    if (!range.full) {
+      const span = modeKey === 'monthly'
+        ? `De ${data().MONTHS[range.from - 1]} a ${data().MONTHS[range.to - 1]}`
+        : `Del ${range.from} al ${range.to} de ${month.name}`;
+      series.legend = series.legend.concat(`<span class="chart-range-note">${esc(span)}</span>`);
+    }
     const canvas = block.querySelector('canvas');
     // Cada panel extra suma alto para que ninguno quede aplastado; en un solo cuadro, algo mas de alto para las
     // etiquetas. Sin Chart.js el canvas ya es el aviso.
@@ -834,6 +1001,7 @@
           <div class="ad-top-value">${fmt('count', ad.results)}<small>${esc(ad.resultLabel)}</small></div>
           <div class="ad-top-meta">${fmt('unitCost', ad.costPerResult)} por resultado · ${fmt('money', ad.spend)} de inversión</div>
         </div>
+        ${pieceOf(ad) ? `<div class="ad-top-arte">${arteMedia(ad)}</div>` : ''}
       </div>`).join('')}</div>`;
   }
 
@@ -887,7 +1055,7 @@
       return `
         <tr>
           <td class="type-col"><span class="objective-label" style="--campaign-color:${colors.get(ad.group) || PREVIOUS_COLOR}"><i class="campaign-dot"></i>${esc(ad.groupLabel)}</span></td>
-          <td class="ad-name-col" title="${esc(ad.ad)}"><span class="ad-name-text">${ad.leader ? '<b class="leader-star" title="Líder del objetivo">&#9733;</b> ' : ''}${adNameLink(ad)}</span></td>
+          <td class="ad-name-col" title="${esc(ad.ad)}">${arteThumb(ad)}<span class="ad-name-text">${ad.leader ? '<b class="leader-star" title="Líder del objetivo">&#9733;</b> ' : ''}${adNameLink(ad)}</span></td>
           <td class="campaign-set-col">${esc(ad.campaigns.join(' / '))}<small>${esc(ad.adSets.join(' / ') || '—')}</small></td>
           <td><span class="objective-pill">${esc(ad.resultLabel)}</span></td>
           <td class="num"><b>${fmt('count', ad.results)}</b></td>
@@ -1240,6 +1408,21 @@
     // Indicadores, vista, un solo cuadro y minimizado de cada cuadro de campana.
     const campaigns = document.getElementById('campaign-blocks');
     campaigns?.addEventListener('change', event => {
+      // Periodo del grafico: un "desde" despues del "hasta" (o al reves) arrastra al otro extremo.
+      const select = event.target.closest('select[data-range]');
+      if (select) {
+        const key = select.closest('.campaign-block')?.dataset.objective;
+        const month = selectedMonth();
+        if (!key || !month) return;
+        const { modeKey } = chartModes(campaignSettings(key).mode, currentPeriod()?.annual);
+        const range = chartRange(key, modeKey, month);
+        const value = Number(select.value);
+        saveChartRange(key, modeKey, select.dataset.range === 'from'
+          ? { from: value, to: Math.max(value, range.to) }
+          : { from: Math.min(value, range.from), to: value });
+        renderCampaignChart(key);
+        return;
+      }
       const input = event.target.closest('input');
       const block = input?.closest('.campaign-block');
       const key = block?.dataset.objective;
@@ -1254,6 +1437,15 @@
       renderCampaignChart(key);
     });
     campaigns?.addEventListener('click', event => {
+      const reset = event.target.closest('[data-range-reset]');
+      if (reset) {
+        const key = reset.closest('.campaign-block')?.dataset.objective;
+        if (!key) return;
+        const { modeKey } = chartModes(campaignSettings(key).mode, currentPeriod()?.annual);
+        saveChartRange(key, modeKey, {});
+        renderCampaignChart(key);
+        return;
+      }
       const combine = event.target.closest('[data-campaign-combine]');
       const key = (combine || event.target.closest('[data-campaign-toggle]'))?.closest('.campaign-block')?.dataset.objective;
       if (!key) return;
@@ -1261,6 +1453,13 @@
       saveCampaignSettings(key, combine ? { combined: !campaignSettings(key).combined } : { collapsed: !campaignSettings(key).collapsed });
       renderCampaignChart(key);
     });
+    // Abrir o plegar la tabla de anuncios de un cuadro se recuerda por objetivo. toggle no burbujea: va en captura.
+    campaigns?.addEventListener('toggle', event => {
+      const details = event.target;
+      if (!details.matches?.('[data-campaign-ads]')) return;
+      const key = details.closest('.campaign-block')?.dataset.objective;
+      if (key && campaignSettings(key).adsOpen !== details.open) saveCampaignSettings(key, { adsOpen: details.open });
+    }, true);
     document.getElementById('ads-objective')?.addEventListener('change', event => {
       state.adsObjective = event.target.value;
       renderAds(currentPeriod());
@@ -1284,6 +1483,7 @@
       // Otra marca: el mes, el año y los filtros elegidos eran de la anterior; se vuelve a su ultimo mes con datos.
       if (event.detail?.brandChanged) {
         Object.assign(state, { monthKey: null, year: null, adsObjective: 'all', historyMonth: HISTORY_ALL, historyYear: null });
+        state.chartRanges.clear();
         state.monthVersion += 1;
       }
       const body = document.getElementById('history-body');
@@ -1312,6 +1512,7 @@
     if (state.wired || !window.ExcambiareData) return;
     state.wired = true;
     wireEvents();
+    wireArtes();
     renderAll();
   }
 

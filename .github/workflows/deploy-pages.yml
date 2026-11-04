@@ -46,6 +46,8 @@ jobs:
           grep -q 'id="gate"' dist/index.html || { echo "::error::dist/index.html no salio cifrado"; exit 1; }
           if grep -qE 'EXCAMBIARE_(META_DATA|DATA_ENDPOINT)|script\.google\.com/macros' dist/index.html; then echo "::error::datos o endpoint en claro"; exit 1; fi
           test -f dist/robots.txt || { echo "::error::falta dist/robots.txt"; exit 1; }
+          # El aviso de version nueva del tablero lee este archivo (solo la version, sin datos).
+          grep -qE '^\{"version":"v[0-9]+\.[0-9]+\.[0-9]+"\}$' dist/version.json || { echo "::error::falta dist/version.json"; exit 1; }
 
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
