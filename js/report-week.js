@@ -3,8 +3,8 @@
   // modelo de la agencia (laminas 16:9, tarjetas blancas de borde fino y acentos en azul).
   //
   // Laminas: portada; resumen ejecutivo; crecimiento de seguidores y su evolucion; por cada marca y objetivo, una
-  // lamina de evolucion (mes a mes y por que cambio el costo) y una de artes (miniatura, formato y veredicto);
-  // conclusiones; que replicar, que descartar y proximos pasos por marca; cierre.
+  // lamina de evolucion (mes a mes y por que cambio el costo) y una de artes (miniatura, formato y datos, sin veredicto);
+  // conclusiones; proximos pasos por marca; cierre.
   //
   // Lleva las tres marcas en el mismo PDF: lee cada una con ExcambiareData.brandSnapshot() sin cambiar la marca activa
   // del tablero. Los numeros salen del barrido de Meta. Con token de Meta en el Web App llegan tambien la miniatura y el
@@ -1407,7 +1407,7 @@
     }).join('');
     return `
       <section class="rp-page">
-        ${head('Qué replicar, qué descartar y próximos pasos', 'Decisiones por marca a partir de los artes y los costos del mes.')}
+        ${head('Próximos pasos', 'Decisiones por marca a partir de los artes y los costos del mes.')}
         <div class="rp-body">
           <div class="rp-grid-3 rp-next-grid">${columns}</div>
         </div>
