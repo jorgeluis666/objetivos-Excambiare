@@ -4572,33 +4572,171 @@ button.topbar-pill[aria-expanded="true"] .status-chevron {
   font-size: 11px;
 }
 
-.rp-verdict {
-  display: inline-block;
-  padding: 3px 9px;
-  border-radius: 999px;
-  font-size: 11px;
+/* Recuadro de fechas arriba a la derecha (como en las plantillas del equipo). */
+.rp-head.has-badge {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.rp-date-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  margin-top: 4px;
+  padding: 7px 13px;
+  border: 1px solid var(--rp-line);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--rp-ink);
+  font-size: 12.5px;
   font-weight: 600;
+}
+
+.rp-date-badge svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: #c8102e;
+  stroke-width: 2;
+}
+
+/* Crecimiento de seguidores: tabla por marca y, al lado, el costo por seguidor. */
+.rp-split-followers {
+  grid-template-columns: 1.25fr 1fr;
+  flex: none;
+}
+
+.rp-split-followers .rp-name {
   white-space: nowrap;
 }
 
-.rp-verdict.good {
-  background: #ecfdf3;
-  color: #15803d;
-}
-
-.rp-verdict.warn {
-  background: #fffbeb;
-  color: #b45309;
-}
-
-.rp-verdict.bad {
-  background: #fef2f2;
-  color: #b91c1c;
-}
-
-.rp-verdict.muted {
-  background: #f1f5f9;
+.rp-card-note {
   color: var(--rp-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.rp-table td.rp-strong {
+  font-weight: 700;
+}
+
+/* Evolucion de seguidores: los dos graficos de lineas, mas bajos para que entren KPIs, tabla y texto. */
+.rp-charts-row.rp-charts-short {
+  height: 126px;
+}
+
+.rp-kpis-compact .rp-kpi {
+  min-height: 74px;
+  padding: 9px 16px;
+}
+
+.rp-kpis-compact .rp-kpi strong {
+  margin: 3px 0 2px;
+  font-size: 21px;
+}
+
+/* Tabla de seguidores por mes: filas de una linea, mas juntas. */
+.rp-followers-table td,
+.rp-followers-table th {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+/* Lamina de cada objetivo: evolucion en lineas a la izquierda y mejores anuncios a la derecha. */
+.rp-split-section {
+  grid-template-columns: 1.2fr 1fr;
+}
+
+.rp-chart-current {
+  fill: #eef4ff;
+}
+
+.rp-chart-line-title {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.rp-axis-current {
+  fill: #1d4ed8;
+}
+
+.rp-best-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.rp-best-list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 7px;
+  min-height: 0;
+  padding: 10px 16px 10px;
+}
+
+.rp-best {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--rp-line);
+  border-radius: 10px;
+}
+
+.rp-best.is-first {
+  border-color: #bfd3fb;
+  background: #f5f8ff;
+}
+
+.rp-thumb.rp-thumb-lg {
+  width: 54px;
+  height: 54px;
+  border-radius: 8px;
+}
+
+.rp-thumb.rp-thumb-lg svg {
+  width: 24px;
+  height: 24px;
+}
+
+.rp-best-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.rp-best-text > b {
+  overflow: hidden;
+  color: var(--rp-ink);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rp-best-text span {
+  color: var(--rp-text);
+}
+
+.rp-best-cost .rp-delta {
+  font-size: 11.5px;
+}
+
+.rp-link {
+  color: #1d4ed8;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.rp-best-empty {
+  margin: 0;
+  color: var(--rp-muted);
+  font-size: 13px;
 }
 
 .rp-exec th,
@@ -4671,10 +4809,6 @@ button.topbar-pill[aria-expanded="true"] .status-chevron {
   fill: var(--rp-faint);
   font-size: 6.5px;
   font-style: italic;
-}
-
-.rp-bar-spend {
-  fill: #cbd5e1;
 }
 
 .rp-legend-text {

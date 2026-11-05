@@ -5,7 +5,7 @@ de Inversiones Excambiare: **Sol y Tierra**, **Mex Cream** y **Gold Fusion**. Ca
 descargas y su carpeta de reportes; el tablero las muestra por separado (los resultados de una marca no se suman con
 los de otra). Montos en soles (`CURRENCY` en `js/data-source.js`).
 
-Version actual: `v2.9.0` (v1.x era el tablero anterior, sobre una hoja manual).
+Version actual: `v2.10.0` (v1.x era el tablero anterior, sobre una hoja manual).
 
 ## Versionado
 
@@ -147,10 +147,10 @@ y acentos en azul. No sigue a la marca elegida arriba: lleva MEX (Mex Cream), Go
 | --- | --- |
 | Portada | Logo de Lima Retail, "Reporte de Publicidad", cliente, marcas y periodo. |
 | Resumen ejecutivo | Inversion total, alcance, seguidores de pauta y costo por seguidor con su variacion; tabla marca x objetivo (inversion, resultados y costo por resultado con su variacion y la lectura: mejoro o empeoro, por los artes o por el CPM); "Lectura del mes". |
-| Crecimiento de seguidores | Seguidores totales, nuevos, bajas, netos, de pauta y costo por seguidor con su variacion; tabla por marca (total, nuevos, bajas, netos, de pauta, organico, inversion de trafico, costo por seguidor); "Clave". |
-| Evolucion de seguidores | Tres graficos por mes y por marca (ultimos 4 meses): seguidores totales, seguidores nuevos de pauta y costo por seguidor; tabla mes a mes con el total de cada mes (se escribe ahi mismo) y debajo pauta · costo; "Evolucion" (cuanto crecio cada cuenta y que movio el costo: mas o menos seguidores o mas o menos inversion). |
-| Por marca y objetivo: evolucion | 6 KPIs con su variacion contra el mes anterior con datos (inversion, resultados, costo por resultado, CPM, alcance —en Trafico al perfil, seguidores— y resultados por mil impresiones); grafico de inversion, resultados y costo por mes con el valor en cada punto (un mes sin datos queda marcado); tabla mes a mes con la comparacion contra el promedio de los meses anteriores; "Por que cambio". |
-| Por marca y objetivo: artes | Hasta 6 artes con miniatura (o el icono de su formato), formato, nuevo, inversion, resultados, costo, comparacion contra el promedio y veredicto (Replicar, Mantener, Ajustar, Renovar, Descartar, Poca data); en Interaccion, el desglose de cada arte (solo las columnas que trae la descarga); en Trafico, los seguidores y el costo por seguidor de cada arte; resultado por formato y "Que funciona" (el mejor arte, el mas eficiente, el que hay que cortar, nuevos contra los que siguieron y el formato, por importancia hasta lo que cabe en la lamina). |
+| Crecimiento de seguidores | Plantilla del equipo: KPIs nuevos, dejaron, netos, de pauta y organico; tabla "Seguidores por marca" (nuevos, bajas, netos, pauta, organico) y al lado "Costo por seguidor (Trafico al perfil)" (inversion, seguidores, costo por seguidor); "Clave" (de los nuevos, cuantos trajo la pauta y cuantos llegaron solos; el neto real y la marca mas eficiente). |
+| Evolucion de seguidores | Plantilla del equipo: KPIs seguidores de pauta del mes contra el promedio de los anteriores, costo por seguidor del mes, crecimiento (veces el promedio) y mejora de costo; dos graficos de lineas (seguidores de pauta y costo por seguidor por marca); tabla de seguidores de pauta mes a mes con el costo por seguidor del mes y su variacion contra el promedio; "Evolucion". |
+| Por marca y objetivo: evolucion | Plantilla del equipo: 6 KPIs con su variacion (inversion, resultados, costo por resultado, CPM, alcance y frecuencia; en Trafico al perfil, seguidores de pauta y costo por seguidor); evolucion por mes solo en lineas (resultados y costo por resultado, con el mes del reporte resaltado); "Mejores anuncios" (los 3 que mas lograron, con su pieza, gasto, resultados, costo y enlace); "Que funciono y por que" (que paso con el costo y por que, que arte funciono y por que, cual no y por que, y el formato). |
+| Por marca y objetivo: artes | Hasta 6 artes con su pieza (o el icono de su formato), formato, nuevo, inversion, resultados, costo, comparacion contra el promedio y enlace, sin veredicto; en Interaccion, el desglose de cada arte; en Trafico, los seguidores y el costo por seguidor de cada arte; resultado por formato y "Que funciono, que no y por que" (gracias a que arte bajo el costo o por cual subio, por que rindio cada uno: respuesta por mil impresiones o costo de mostrarlo, y el formato). |
 | Conclusiones | Seguidores, artes para replicar (y el formato que domina) y que movio los costos; nota del periodo. |
 | Que replicar, que descartar y proximos pasos | Una columna por marca con los artes a replicar, los que hay que descartar o ajustar y lo que toca el mes siguiente. |
 | Cierre | Logo y firma de Lima Retail. |
@@ -162,7 +162,8 @@ y acentos en azul. No sigue a la marca elegida arriba: lleva MEX (Mex Cream), Go
 - **Por que cambio el costo:** costo por resultado = CPM ÷ resultados por mil impresiones. Si el que mas se movio es
   el CPM, la causa es la subasta o el publico; si son los resultados por mil impresiones, la causa son los artes.
   Ademas compara inversion contra resultados y el costo contra el promedio de los meses anteriores.
-- **Veredicto de cada arte:** su costo por resultado contra el del objetivo en el mes. Replicar = 20% o mas barato;
+- **Veredicto de cada arte** (no sale en la lamina de artes; ordena la de proximos pasos): su costo por resultado contra
+  el del objetivo en el mes. Replicar = 20% o mas barato;
   Ajustar = 15% o mas caro; Descartar = 50% o mas caro con al menos el 5% de la inversion (o sin resultados);
   Renovar = ya corria el mes anterior y su costo subio 40% o mas; Poca data = menos de S/ 3 o 500 impresiones.
   Nuevo = no corrio el mes inmediato anterior. Umbrales en `VERDICT` de `js/report-week.js`. En Trafico al perfil,
@@ -172,14 +173,13 @@ y acentos en azul. No sigue a la marca elegida arriba: lleva MEX (Mex Cream), Go
 - **Formato:** con token de Meta en el Web App (ver "Meta en el Web App") llega el exacto (reel, video, carrusel o
   imagen) y la miniatura. Sin el, se deduce de las reproducciones de 3 s: Video o Estatico.
 - **Seguidores:** de pauta = seguidores que trajeron los anuncios de todas las campañas (columna Seguimientos de
-  Instagram); costo por seguidor = inversion de Trafico al perfil ÷ seguidores de pauta; netos = nuevos − bajas;
-  organico = nuevos − pauta (sin descontar bajas). Total, nuevos y bajas llegan de Instagram si el Web App esta
-  conectado; si no, se escriben con un clic en la tabla de seguidores (por marca y por mes) y lo escrito gana sobre
-  Instagram. Salen de Meta Business Suite > Estadisticas > Publico > Tendencias, con la cuenta de Instagram y el mes
-  completo: Total = Seguidores (total), Nuevos = Seguimientos, Bajas = Personas que dejaron de seguirte. El total de
-  los meses anteriores se escribe en la tabla de la lamina de evolucion (cada celda guarda en su mes). Las
-  cifras quedan guardadas en el navegador junto con los textos (`excambiare-report-notes-v2`); "Restablecer textos"
-  no las borra.
+  Instagram); costo por seguidor = inversion de Trafico al perfil ÷ seguidores de pauta de todas las campañas (el mismo
+  en las laminas de seguidores y en la de Trafico al perfil, donde cada arte se compara contra ese); netos = nuevos − bajas;
+  organico = nuevos − pauta (sin descontar bajas). Nuevos y bajas llegan de Instagram si el Web App esta conectado;
+  si no, se escriben con un clic en la tabla de seguidores (por marca y por mes) y lo escrito gana sobre Instagram.
+  Salen de Meta Business Suite > Estadisticas > Publico > Tendencias, con la cuenta de Instagram y el mes completo:
+  Nuevos = Seguimientos, Bajas = Personas que dejaron de seguirte. Las cifras quedan guardadas en el navegador junto
+  con los textos (`excambiare-report-notes-v2`); "Restablecer textos" no las borra.
 - **Antes de descargar el PDF:** un recuadro (que no sale en el PDF) avisa lo que falta o esta mal en los datos: un
   mes sin descarga en la carpeta, una descarga que no se pudo leer o que no llega al ultimo dia del mes, una descarga
   sin la columna de seguidores, el mismo anuncio (mismo ID de Meta) en las descargas de dos marcas (una trae filas de

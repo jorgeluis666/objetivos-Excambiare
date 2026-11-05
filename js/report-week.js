@@ -24,6 +24,10 @@
   const MAX_ADS = 6;
   // Largo del "Que funciona" de la lamina de artes (caracteres): mas texto empuja la tabla fuera de la lamina.
   const ARTS_TEXT_MAX = 620;
+  // Largo del analisis de la lamina de cada objetivo ("Que funciono y por que").
+  const SECTION_TEXT_MAX = 720;
+  // Mejores anuncios de la lamina de cada objetivo (con su pieza).
+  const BEST_ADS = 3;
   // Un cambio menor a esto se lee como estable.
   const STEADY = 0.05;
   // Veredicto de cada arte: su costo por resultado contra el del objetivo en el mes. Con muy poca entrega no se juzga.
@@ -34,14 +38,6 @@
   const MIN_FOLLOWS = 10;
   // Desglose de las interacciones que trae la descarga (solo las columnas que vinieron: una que falta no es un 0).
   const ENGAGEMENT = [['plays3s', 'reprod.'], ['reactions', 'reacc.'], ['saves', 'guard.'], ['shares', 'compart.'], ['comments', 'coment.']];
-  const VERDICTS = {
-    replicar: { label: 'Replicar', tone: 'good' },
-    mantener: { label: 'Mantener', tone: 'muted' },
-    ajustar: { label: 'Ajustar', tone: 'warn' },
-    fatiga: { label: 'Renovar', tone: 'warn' },
-    descartar: { label: 'Descartar', tone: 'bad' },
-    poca: { label: 'Poca data', tone: 'muted' },
-  };
   // Orden y nombres del modelo; el color identifica a la marca en los graficos de seguidores.
   const BRANDS = [
     { key: 'mex-cream', name: 'MEX', color: '#2563eb' },
@@ -61,6 +57,7 @@
   const FORMAT_PLURAL = { Video: 'los videos', Reel: 'los reels', Carrusel: 'los carruseles', Imagen: 'las imágenes', 'Estático': 'las piezas estáticas' };
 
   const ICONS = {
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
     user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
     trend: '<path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/>',
     play: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m10 8 6 4-6 4z"/>',
@@ -156,6 +153,8 @@
         option: `${name} ${year}${closed ? '' : ` · 1–${to} (en curso)`}`,
         labels: {
           range: closed ? `${name} ${year}` : `1 – ${to} ${name} ${year}`,
+          // Recuadro con las fechas, arriba a la derecha de las laminas (como en las plantillas del equipo).
+          badge: `1 – ${to} ${short} ${year}`,
           window: closed ? `${name.toLowerCase()} completo` : `1 – ${to} ${short}.`,
           days: closed ? '' : `1-${to}`,
           source: `Fuente: Meta Ads · ${closed ? `${name.toLowerCase()} ${year}` : `1 – ${to} ${short} ${year}`}`,
@@ -280,7 +279,9 @@
   function buildSection(def, months, data, known) {
     const history = months.map(item => {
       const rows = item.rows.filter(row => row.group === def.key);
-      return { key: item.key, status: item.status, rows, found: item.found, has: rows.some(activity), sum: totals(rows) };
+      // Seguidores de pauta de la marca en el mes: los de todas sus campañas, no solo los de este objetivo.
+      const brandFollows = item.found.includes('follows') ? sumOf(item.rows, 'follows') : null;
+      return { key: item.key, status: item.status, rows, found: item.found, has: rows.some(activity), sum: totals(rows), brandFollows };
     });
     const current = history[history.length - 1];
     if (!current.has) return null;
@@ -293,8 +294,10 @@
     const byFollows = def.key === 'trafico-perfil' && current.found.includes('follows') && sum.follows >= MIN_FOLLOWS;
     const scoreOf = item => (byFollows ? item.follows : item.results);
     const costOf = item => (scoreOf(item) > 0 ? item.spend / scoreOf(item) : null);
+    // El costo por seguidor del objetivo es el de la marca: inversion en Trafico al perfil ÷ seguidores de pauta de todas
+    // las campañas (la formula del equipo), el mismo de la lamina de seguidores. Cada arte se mide contra ese.
     const score = byFollows
-      ? { unit: 'seguidores', one: 'seguidor', of: 'de los seguidores', total: sum.follows, cost: costOf(sum) }
+      ? { unit: 'seguidores', one: 'seguidor', of: 'de los seguidores', total: sum.follows, cost: current.brandFollows > 0 ? sum.spend / current.brandFollows : costOf(sum) }
       : { unit: def.unit, one: def.one, of: 'de los resultados', total: sum.results, cost: sum.costPerResult };
     const prevAds = new Map(prev ? adsOf(prev.rows, data, prev.found).map(ad => [ad.key, ad]) : []);
     const ads = adsOf(current.rows, data, current.found).map(ad => {
@@ -349,8 +352,6 @@
     const instagram = data?.instagram?.months?.get(item.key) || null;
     const nuevos = typed('nuevos') ?? instagram?.follows ?? null;
     const dejaron = typed('dejaron') ?? instagram?.unfollows ?? null;
-    // Seguidores totales al cierre del mes ("Seguidores · Total" en Tendencias).
-    const total = typed('total') ?? instagram?.end ?? null;
     return {
       key: item.key,
       status: item.status,
@@ -363,10 +364,8 @@
       netos: nuevos !== null && dejaron !== null ? nuevos - dejaron : null,
       // Organico = nuevos − los que trajo la pauta (sin descontar bajas), como en el modelo.
       organico: nuevos !== null && paid !== null ? Math.max(nuevos - paid, 0) : null,
-      total,
       typedNuevos: typed('nuevos') !== null,
       typedDejaron: typed('dejaron') !== null,
-      typedTotal: typed('total') !== null,
       fromInstagram: Boolean(instagram),
     };
   }
@@ -423,7 +422,6 @@
         dejaron: of('dejaron'),
         netos: of('netos'),
         organico: of('organico'),
-        total: of('total'),
       };
     });
     const spend = keys.map((key, index) => ({
@@ -445,8 +443,6 @@
       // Mes anterior para los totales: el ultimo con descarga de las tres marcas.
       prevIndex: [...spend.keys()].slice(0, last).reverse().find(index => spend[index].complete && spend[index].spend > 0) ?? null,
       prevFollowersIndex: [...followers.keys()].slice(0, last).reverse().find(index => followers[index].paid !== null) ?? null,
-      // El total de seguidores se compara con el ultimo mes en que se escribio el de las tres marcas.
-      prevTotalIndex: [...followers.keys()].slice(0, last).reverse().find(index => followers[index].total !== null) ?? null,
       hasCreatives: brands.some(brand => brand.data?.creatives?.size || brand.data?.artes?.piezas?.size),
       hasInstagram: brands.some(brand => brand.data?.instagram),
     };
@@ -462,61 +458,6 @@
       : { text: `Empeoró${cause}`, tone: 'bad' };
   }
 
-  // Por que cambio el costo: costo = CPM ÷ resultados por mil impresiones, inversion contra resultados y el promedio
-  // de los meses anteriores.
-  function suggestWhy(section) {
-    const { sum, prev } = section;
-    const parts = [];
-    if (!prev) {
-      return `Primer mes con ${section.unit} en los últimos ${EVOLUTION_MONTHS} meses: todavía no hay un mes anterior para comparar. ${num(sum.results)} ${section.unit} a ${cost(sum.costPerResult)} cada una, con ${money(sum.spend)} de inversión y un CPM de ${money2(sum.cpm)}.`;
-    }
-    const vs = monthLong(prev.key);
-    const missing = section.gap.filter(point => point.status !== 'ok').map(point => monthLong(point.key));
-    if (missing.length) parts.push(`Sin datos de ${list(missing)}: la comparación es contra ${vs}.`);
-    const costChange = section.costChange;
-    if (costChange !== null) {
-      parts.push(Math.abs(costChange) < STEADY
-        ? `El costo por ${section.one} se mantuvo frente a ${vs} (${cost(prev.sum.costPerResult)} → ${cost(sum.costPerResult)}).`
-        : `El costo por ${section.one} ${costChange > 0 ? 'subió' : 'bajó'} ${pctAbs(costChange)} frente a ${vs} (${cost(prev.sum.costPerResult)} → ${cost(sum.costPerResult)}).`);
-    }
-    const { cpmChange, rateChange, main } = section.driver;
-    if (costChange !== null && Math.abs(costChange) >= STEADY && main) {
-      const rates = `${rateText(sum.rate)} ${section.unit} por cada mil impresiones contra ${rateText(prev.sum.rate)}`;
-      const cpms = `el CPM pasó de ${money2(prev.sum.cpm)} a ${money2(sum.cpm)}`;
-      if (main === 'rate') {
-        parts.push(`**La causa son los artes:** ${rates} (${pctText(rateChange)}); ${rateChange < 0 ? 'las piezas del mes generaron menos respuesta cada vez que se mostraron' : 'las piezas del mes conectaron mejor con el público'}${Math.abs(cpmChange) >= STEADY ? `, mientras ${cpms} (${pctText(cpmChange)})` : ' y el CPM casi no cambió'}.`);
-      } else {
-        parts.push(`**La causa es el costo de mostrar los anuncios:** ${cpms} (${pctText(cpmChange)})${cpmChange > 0 ? ', señal de una subasta más competida o un público más acotado' : ', se llegó al público más barato'}${Math.abs(rateChange) >= STEADY ? `; la respuesta a los artes ${rateChange > 0 ? 'mejoró' : 'cayó'} ${pctAbs(rateChange)}` : ' y la respuesta a los artes se mantuvo'}.`);
-      }
-    }
-    const spendChange = change(sum.spend, prev.sum.spend);
-    const resultChange = change(sum.results, prev.sum.results);
-    if (spendChange !== null && resultChange !== null) {
-      let reading;
-      if (spendChange >= STEADY && resultChange <= -STEADY) reading = 'más inversión no trajo más resultados; es un tema de eficiencia, no de presupuesto';
-      else if (spendChange <= -STEADY && resultChange >= STEADY) reading = 'se logró más con menos inversión';
-      else if (spendChange >= STEADY && resultChange > spendChange + STEADY) reading = 'la inversión adicional rindió más que proporcionalmente';
-      else if (spendChange >= STEADY) reading = 'los resultados crecieron menos que la inversión';
-      else if (spendChange <= -STEADY && resultChange < spendChange - STEADY) reading = 'los resultados cayeron más que la inversión';
-      else if (spendChange <= -STEADY) reading = 'los resultados bajaron en línea con la inversión';
-      else if (resultChange >= STEADY) reading = 'con la misma inversión hubo más resultados';
-      else if (resultChange <= -STEADY) reading = 'con la misma inversión hubo menos resultados';
-      else reading = 'inversión y resultados se mantuvieron';
-      parts.push(`Inversión ${signedMoney(sum.spend - prev.sum.spend)} (${pctText(spendChange)}) y ${section.unit} ${signed(sum.results - prev.sum.results)} (${pctText(resultChange)}): ${reading}.`);
-    }
-    // En Trafico al perfil las visitas son el camino: lo que se busca son los seguidores que trajeron esos anuncios.
-    if (section.key === 'trafico-perfil' && section.found.includes('follows') && prev.found.includes('follows') && sum.follows > 0) {
-      parts.push(`Sus anuncios trajeron ${num(sum.follows)} seguidores a ${money2(sum.spend / sum.follows)} cada uno (${vs}: ${num(prev.sum.follows)}${prev.sum.follows > 0 ? ` a ${money2(prev.sum.spend / prev.sum.follows)}` : ''}).`);
-    }
-    if (section.avg && section.previous.length >= 2) {
-      const avgChange = change(sum.costPerResult, section.avg.costPerResult);
-      if (avgChange !== null) {
-        parts.push(`Contra el promedio de ${list(section.previous.map(point => monthLong(point.key)))} (${cost(section.avg.costPerResult)}), el costo está ${Math.abs(avgChange) < STEADY ? 'en línea' : `${pctAbs(avgChange)} ${avgChange > 0 ? 'por encima' : 'por debajo'}`}.`);
-      }
-    }
-    return parts.join(' ');
-  }
-
   // Que funciona: el mejor arte y por que, el mas eficiente, el que hay que cortar, nuevos contra los que siguieron y el
   // formato. En Trafico al perfil con seguidores, todo por seguidor.
   function suggestArts(section) {
@@ -525,20 +466,31 @@
     // Cada frase con su importancia (1 = la primera que entra).
     const parts = [];
     const add = (rank, text) => parts.push({ rank, text });
+    // Que funciono, que no y por que, y gracias a que arte bajo (o por cual subio) el costo frente al mes anterior. Sin
+    // recomendaciones: esas van en la lamina de proximos pasos.
     const best = section.best;
+    const weak = weakestAd(section);
+    const costMove = section.prev && section.costChange !== null && Math.abs(section.costChange) >= STEADY ? section.costChange : null;
     if (best) {
-      add(1, `**"${best.name}" fue el arte que ${section.byFollows ? 'más seguidores trajo' : 'mejor rindió'}:** ${num(best.score)} ${score.unit} a ${cost(best.scoreCost)}${section.byFollows ? ' cada uno' : ''} (${pctText(best.index - 1)} vs el promedio), ${share(best.score, score.total)} ${score.of} con ${share(best.spend, sum.spend)} de la inversión${best.format ? `; formato ${best.format.toLowerCase()}` : ''}.`);
+      const why = adWhy(best, section);
+      const lead = costMove !== null && costMove < 0
+        ? `**El costo${per} bajó ${pctAbs(costMove)} frente a ${monthLong(section.prev.key)} gracias a "${best.name}"**`
+        : `**"${best.name}" fue el arte que ${section.byFollows ? 'más seguidores trajo' : 'mejor rindió'}**`;
+      add(1, `${lead}${best.format ? ` (${best.format.toLowerCase()})` : ''}: ${num(best.score)} ${score.unit} a ${cost(best.scoreCost)}${section.byFollows ? ' cada uno' : ''} (${pctText(best.index - 1)} vs el promedio), ${share(best.score, score.total)} ${score.of} con ${share(best.spend, sum.spend)} de la inversión${why ? `; funcionó porque ${why}` : ''}.`);
     }
-    // Un arte mas barato que el mejor pero con menos inversion: el candidato a recibir mas presupuesto.
-    const efficient = section.ads.filter(ad => ad.verdict === 'replicar' && ad !== best).sort((left, right) => left.index - right.index)[0];
+    if (weak) {
+      const why = adWhy(weak, section);
+      const fatigue = weak.scoreBefore && weak.scoreCost && weak.scoreCost / weak.scoreBefore >= VERDICT.fatigue;
+      const what = !(weak.score > 0)
+        ? `gastó ${money(weak.spend)} sin ${section.byFollows ? 'traer seguidores' : 'resultados'}`
+        : `costó ${cost(weak.scoreCost)}${per}, ${pctAbs(weak.index - 1)} más que el promedio, con ${money(weak.spend)} invertidos`;
+      const reason = fatigue ? `ya corría en ${monthLong(section.prev.key)} y su costo subió ${pctAbs(weak.scoreCost / weak.scoreBefore - 1)}: la pieza se desgastó` : why;
+      add(2, `${costMove !== null && costMove > 0 ? `El costo${per} subió ${pctAbs(costMove)} frente a ${monthLong(section.prev.key)} sobre todo por "${weak.name}"` : `**No funcionó "${weak.name}"**`}${weak.format ? ` (${weak.format.toLowerCase()})` : ''}: ${what}${reason ? `, porque ${reason}` : ''}.`);
+    }
+    // Un arte mas barato que el mejor pero con menos inversion.
+    const efficient = section.ads.filter(ad => ad !== best && ad !== weak && ad.score > 0 && ad.index !== null && ad.index <= VERDICT.replicate && ad.spend >= VERDICT.minSpend).sort((left, right) => left.index - right.index)[0];
     if (best && efficient && efficient.index < best.index) {
-      add(3, `"${efficient.name}" fue el más eficiente: ${cost(efficient.scoreCost)}${per} (${pctText(efficient.index - 1)}) con ${money(efficient.spend)}; merece más presupuesto.`);
-    }
-    const worst = section.ads.filter(ad => ad.verdict === 'descartar' || ad.verdict === 'fatiga').sort((left, right) => right.spend - left.spend)[0];
-    if (worst) {
-      if (!(worst.score > 0)) add(2, `"${worst.name}" gastó ${money(worst.spend)} sin ${section.byFollows ? 'traer seguidores' : 'resultados'}: pausarlo.`);
-      else if (worst.verdict === 'fatiga') add(2, `"${worst.name}" ya corría en ${monthLong(section.prev.key)} y su costo${per} subió ${pctAbs(worst.scoreCost / worst.scoreBefore - 1)}: la pieza se desgastó, toca renovarla.`);
-      else add(2, `"${worst.name}" costó ${times(worst.index)} el promedio${per} (${cost(worst.scoreCost)}) con ${money(worst.spend)} invertidos: conviene pausarlo y pasar ese presupuesto a los artes que funcionan.`);
+      add(3, `"${efficient.name}" fue el más eficiente: ${cost(efficient.scoreCost)}${per} (${pctText(efficient.index - 1)}) con solo ${money(efficient.spend)} de inversión.`);
     }
     // Los anuncios traen las mismas sumas que las filas: se suman igual.
     const costOf = ads => {
@@ -572,6 +524,76 @@
     return parts.filter(part => chosen.has(part)).map(part => part.text).join(' ') || `${num(sum.results)} ${section.unit} en el período con ${money(sum.spend)} de inversión.`;
   }
 
+  // Por que un arte rindio mejor o peor que el promedio del objetivo. Su costo por resultado es CPM ÷ resultados por mil
+  // impresiones, asi que la razon es una de dos: la gente respondio mas o menos a la pieza, o mostrarla costo menos o
+  // mas. Se dice la que mas se aleja del promedio, con sus cifras. En Trafico al perfil con seguidores, por seguidor.
+  function adWhy(ad, section) {
+    const scoreOf = item => (section.byFollows ? item.follows : item.results);
+    const rateOf = item => (item.impressions > 0 ? (scoreOf(item) / item.impressions) * 1000 : null);
+    const rate = change(rateOf(ad), rateOf(section.sum));
+    const cpm = change(ad.cpm, section.sum.cpm);
+    if (rate === null || cpm === null || !(scoreOf(ad) > 0)) return '';
+    const unit = section.byFollows ? 'seguidores' : section.unit;
+    if (Math.abs(Math.log(1 + rate)) >= Math.abs(Math.log(1 + cpm))) {
+      return `${rate > 0 ? 'la gente respondió más a la pieza' : 'la gente respondió menos a la pieza'}: ${rateText(rateOf(ad))} ${unit} por cada mil impresiones contra ${rateText(rateOf(section.sum))} del promedio`;
+    }
+    return `${cpm < 0 ? 'mostrarla costó menos' : 'mostrarla costó más'}: CPM de ${money2(ad.cpm)} contra ${money2(section.sum.cpm)} del objetivo`;
+  }
+
+  // El arte que no funciono: el que mas gasto entre los que costaron 15% o mas que el promedio (o no lograron nada),
+  // con inversion e impresiones suficientes para juzgarlo.
+  function weakestAd(section) {
+    return section.ads
+      .filter(ad => ad !== section.best && ad.spend >= VERDICT.minSpend && ad.impressions >= VERDICT.minImpressions)
+      .filter(ad => !(ad.score > 0) || (ad.index !== null && ad.index >= VERDICT.adjust))
+      .sort((left, right) => right.spend - left.spend)[0] || null;
+  }
+
+  // Lamina de cada objetivo: que paso con el costo y por que, que arte funciono y por que, cual no y por que, y el
+  // formato. Las frases entran por importancia hasta lo que cabe en la tarjeta.
+  function suggestSection(section) {
+    const { sum, prev, score } = section;
+    const per = section.byFollows ? ' por seguidor' : '';
+    const parts = [];
+    const add = (rank, text) => parts.push({ rank, text });
+    if (prev && section.costChange !== null) {
+      const vs = monthLong(prev.key);
+      const missing = section.gap.filter(point => point.status !== 'ok').map(point => monthLong(point.key));
+      const { main, cpmChange, rateChange } = section.driver;
+      const moved = Math.abs(section.costChange) < STEADY ? 'se mantuvo' : `${section.costChange > 0 ? 'subió' : 'bajó'} ${pctAbs(section.costChange)}`;
+      let cause = '';
+      if (Math.abs(section.costChange) >= STEADY && main === 'rate') cause = rateChange > 0 ? `: los artes conectaron mejor (${rateText(sum.rate)} ${section.unit} por mil impresiones contra ${rateText(prev.sum.rate)})` : `: los artes generaron menos respuesta (${rateText(sum.rate)} ${section.unit} por mil impresiones contra ${rateText(prev.sum.rate)})`;
+      else if (Math.abs(section.costChange) >= STEADY && main === 'cpm') cause = cpmChange > 0 ? `: mostrar los anuncios costó más (CPM ${money2(prev.sum.cpm)} → ${money2(sum.cpm)})` : `: mostrar los anuncios costó menos (CPM ${money2(prev.sum.cpm)} → ${money2(sum.cpm)})`;
+      add(1, `${missing.length ? `Sin datos de ${list(missing)}, se compara con ${vs}. ` : ''}El costo por ${section.one} ${moved} frente a ${vs} (${cost(prev.sum.costPerResult)} → ${cost(sum.costPerResult)})${cause}.`);
+    } else {
+      add(1, `${num(sum.results)} ${section.unit} a ${cost(sum.costPerResult)} por ${section.one} con ${money(sum.spend)} de inversión; no hay un mes anterior con datos para comparar.`);
+    }
+    const best = section.best;
+    if (best) {
+      const why = adWhy(best, section);
+      add(2, `**Qué funcionó:** "${best.name}"${best.format ? ` (${best.format.toLowerCase()})` : ''} logró ${share(best.score, score.total)} ${score.of} con ${share(best.spend, sum.spend)} de la inversión, a ${cost(best.scoreCost)}${per} (${pctText(best.index - 1)} vs el promedio)${why ? `, porque ${why}` : ''}.`);
+    }
+    const weak = weakestAd(section);
+    if (weak) {
+      const why = adWhy(weak, section);
+      add(3, `**Qué no funcionó:** "${weak.name}"${weak.format ? ` (${weak.format.toLowerCase()})` : ''} ${!(weak.score > 0) ? `gastó ${money(weak.spend)} sin ${section.byFollows ? 'traer seguidores' : 'resultados'}` : `costó ${cost(weak.scoreCost)}${per}, ${pctAbs(weak.index - 1)} más que el promedio`}${why ? `, porque ${why}` : ''}.`);
+    }
+    if (section.formats.length >= 2) {
+      const top = section.formats[0];
+      const low = section.formats[section.formats.length - 1];
+      add(4, `Por formato, ${FORMAT_PLURAL[top.format] || top.format} rindieron mejor (${cost(top.cost)} por ${score.one}) que ${FORMAT_PLURAL[low.format] || low.format} (${cost(low.cost)}).`);
+    } else if (section.formats.length === 1) {
+      add(5, `Todos los artes con resultados fueron ${(FORMAT_PLURAL[section.formats[0].format] || section.formats[0].format).replace(/^(los|las) /, '')}.`);
+    }
+    let length = 0;
+    const chosen = new Set([...parts].sort((left, right) => left.rank - right.rank).filter(part => {
+      if (length && length + part.text.length > SECTION_TEXT_MAX) return false;
+      length += part.text.length + 1;
+      return true;
+    }));
+    return parts.filter(part => chosen.has(part)).map(part => part.text).join(' ');
+  }
+
   const cheapest = items => items.filter(item => finite(item.costPerFollower)).sort((left, right) => left.costPerFollower - right.costPerFollower)[0] || null;
   const priciest = items => items.filter(item => finite(item.costPerFollower)).sort((left, right) => right.costPerFollower - left.costPerFollower)[0] || null;
 
@@ -583,55 +605,70 @@
     const best = cheapest(perBrand);
     const worst = priciest(perBrand);
     const parts = [];
-    if (current.paid !== null) {
-      parts.push(`**${num(current.paid)} seguidores llegaron por la pauta**${prev ? ` (${pctText(change(current.paid, prev.paid))} vs ${monthLong(prev.key)})` : ''}${current.costPerFollower ? `, a ${money2(current.costPerFollower)} cada uno${prev?.costPerFollower ? ` (${pctText(change(current.costPerFollower, prev.costPerFollower))})` : ''}` : ''}.`);
+    // Como en la plantilla del equipo: de los nuevos, cuantos trajo la pauta y cuantos llegaron solos; el neto real
+    // descontando bajas; y lo que costo cada seguidor por marca.
+    if (current.nuevos !== null && current.dejaron !== null && current.paid !== null) {
+      parts.push(`**${num(current.nuevos)} seguidores nuevos:** ${num(current.paid)} los trajo la pauta y ${num(current.organico)} llegaron orgánicamente. Restando ${num(current.dejaron)} bajas, el crecimiento neto real es ${signed(current.netos)}.`);
+    } else if (current.paid !== null) {
+      parts.push(`**${num(current.paid)} seguidores llegaron por la pauta**${prev ? ` (${pctText(change(current.paid, prev.paid))} vs ${monthLong(prev.key)})` : ''}${current.costPerFollower ? `, a ${money2(current.costPerFollower)} cada uno${prev?.costPerFollower ? ` (${pctText(change(current.costPerFollower, prev.costPerFollower))})` : ''}` : ''}. Faltan los nuevos y las bajas de Meta Business Suite para el crecimiento neto.`);
     } else {
       parts.push('La descarga de Meta Ads de alguna marca no trae la columna de seguidores (Seguimientos de Instagram): sin ella no hay seguidores de pauta ni costo por seguidor.');
     }
-    if (best && worst && best !== worst) parts.push(`${best.name} fue la marca más eficiente (${money2(best.costPerFollower)} por seguidor) y ${worst.name} la más cara (${money2(worst.costPerFollower)}).`);
-    else if (best) parts.push(`${best.name}: ${money2(best.costPerFollower)} por seguidor.`);
-    if (current.nuevos !== null && current.dejaron !== null) {
-      parts.push(`En total ${num(current.nuevos)} seguidores nuevos y ${num(current.dejaron)} bajas: crecimiento neto ${signed(current.netos)}${current.organico !== null ? `; ${num(current.organico)} llegaron de forma orgánica` : ''}.`);
-    } else {
-      parts.push('Faltan los seguidores nuevos y las bajas de Instagram de cada marca para medir el crecimiento neto.');
-    }
-    if (current.total !== null) {
-      const before = report.prevTotalIndex !== null ? report.followers[report.prevTotalIndex] : null;
-      parts.push(`Las ${report.brands.length} marcas cierran ${monthLong(current.key)} con **${num(current.total)} seguidores**${before ? ` (${signed(current.total - before.total)} vs ${monthLong(before.key)})` : ''}.`);
-    }
+    if (best && worst && best !== worst) parts.push(`Las ${perBrand.length} marcas captaron entre ${money2(best.costPerFollower)} y ${money2(worst.costPerFollower)} por seguidor de pauta: ${best.name} la más eficiente y ${worst.name} la más cara.`);
+    else if (best) parts.push(`${best.name}: ${money2(best.costPerFollower)} por seguidor de pauta.`);
     return parts.join(' ');
+  }
+
+  // Seguidores de pauta del mes contra el promedio de los meses anteriores con dato (las tres marcas juntas), para los
+  // KPIs y el texto de la lamina de evolucion.
+  function followersTrend(report) {
+    const points = report.followers;
+    const current = points[points.length - 1];
+    const earlier = points.slice(0, -1).filter(point => point.paid !== null);
+    const avgPaid = earlier.length ? earlier.reduce((total, point) => total + point.paid, 0) / earlier.length : null;
+    const earlierSpend = earlier.reduce((total, point) => total + (point.trafficSpend || 0), 0);
+    const earlierPaid = earlier.reduce((total, point) => total + point.paid, 0);
+    const avgCost = earlierPaid > 0 && earlierSpend > 0 ? earlierSpend / earlierPaid : null;
+    const costs = points.filter(point => finite(point.costPerFollower)).map(point => point.costPerFollower);
+    return {
+      current,
+      earlier,
+      avgPaid,
+      avgCost,
+      growth: avgPaid > 0 && current.paid !== null ? current.paid / avgPaid : null,
+      costChange: change(current.costPerFollower, avgCost),
+      lowest: finite(current.costPerFollower) && costs.length > 1 && current.costPerFollower <= Math.min(...costs),
+      span: earlier.length ? `${monthShort(earlier[0].key).toLowerCase()}–${monthShort(earlier[earlier.length - 1].key).toLowerCase()}` : '',
+    };
   }
 
   function suggestFollowersEvolution(report) {
     const parts = [];
-    // Una frase por marca: cuanto crecio la cuenta (del primer al ultimo mes con el total escrito) y como se movio el
-    // costo por seguidor y por que.
-    report.brands.forEach(brand => {
-      const bits = [];
-      const totals = brand.followers.filter(item => finite(item.total));
-      if (totals.length >= 2) {
-        const from = totals[0];
-        const to = totals[totals.length - 1];
-        bits.push(`de ${num(from.total)} a ${num(to.total)} seguidores entre ${monthLong(from.key)} y ${monthLong(to.key)} (${signed(to.total - from.total)})`);
-      }
+    // Primero el conjunto (como en la plantilla del equipo) y despues una frase por marca: como se movio el costo por
+    // seguidor y por que.
+    const trend = followersTrend(report);
+    const month = monthLong(trend.current.key);
+    if (trend.growth !== null && finite(trend.current.costPerFollower)) {
+      const moved = trend.growth >= 1.1 ? (trend.growth >= 2 ? 'se multiplicaron' : 'subieron') : trend.growth <= 0.9 ? 'bajaron' : 'se mantuvieron';
+      const costMove = trend.costChange === null ? '' : trend.costChange <= -STEADY ? ` y el costo cayó a **${money2(trend.current.costPerFollower)}** (${pctText(trend.costChange)})` : trend.costChange >= STEADY ? ` y el costo subió a **${money2(trend.current.costPerFollower)}** (${pctText(trend.costChange)})` : ` con un costo estable de ${money2(trend.current.costPerFollower)}`;
+      const reading = trend.costChange !== null && trend.costChange <= -STEADY ? ': Tráfico al perfil se volvió más eficiente en captar seguidores' : trend.costChange !== null && trend.costChange >= STEADY ? ': cada seguidor costó más que en los meses anteriores' : '';
+      parts.push(`En ${month} los seguidores por pauta ${moved} (${num(trend.current.paid)} vs ~${num(trend.avgPaid)} promedio de ${trend.span})${costMove}${reading}.`);
+    }
+    // Por marca, en una sola frase: de cuanto a cuanto paso el costo por seguidor y que lo movio (mas o menos seguidores
+    // de pauta, o mas o menos inversion en Trafico al perfil: el que mas explica el cambio).
+    const moves = report.brands.map(brand => {
       const points = brand.followers.filter(item => finite(item.costPerFollower));
-      if (points.length >= 2) {
-        const first = points[0];
-        const last = points[points.length - 1];
-        const delta = change(last.costPerFollower, first.costPerFollower);
-        const spend = change(last.trafficSpend, first.trafficSpend) || 0;
-        // El costo por seguidor se mueve por los seguidores que llegan o por lo invertido en Trafico al perfil: primero
-        // va el que mas explica el cambio, y el otro solo si tambien se movio.
-        const followers = `${last.paid > first.paid ? 'más' : 'menos'} seguidores de pauta (${num(first.paid)} → ${num(last.paid)})`;
-        const investment = `${spend > 0 ? 'más' : 'menos'} inversión en Tráfico al perfil (${money(first.trafficSpend)} → ${money(last.trafficSpend)})`;
-        const byFollowers = Math.abs(Math.log(last.paid / first.paid)) >= Math.abs(Math.log(1 + spend));
-        const cause = byFollowers
-          ? `${followers}${Math.abs(spend) >= 0.1 ? ` con ${investment}` : ''}`
-          : `${investment} y ${num(first.paid)} → ${num(last.paid)} seguidores de pauta`;
-        bits.push(`el costo por seguidor fue de ${money2(first.costPerFollower)} en ${monthLong(first.key)} a ${money2(last.costPerFollower)} en ${monthLong(last.key)} (${pctText(delta)}) por ${cause}`);
-      }
-      if (bits.length) parts.push(`**${brand.name}:** ${bits.join('; ')}.`);
-    });
+      if (points.length < 2) return null;
+      const first = points[0];
+      const last = points[points.length - 1];
+      const spend = change(last.trafficSpend, first.trafficSpend) || 0;
+      const byFollowers = Math.abs(Math.log(last.paid / first.paid)) >= Math.abs(Math.log(1 + spend));
+      const cause = byFollowers
+        ? `${last.paid > first.paid ? 'más' : 'menos'} seguidores de pauta (${num(first.paid)} → ${num(last.paid)})`
+        : `${spend > 0 ? 'más' : 'menos'} inversión en Tráfico (${money(first.trafficSpend)} → ${money(last.trafficSpend)})`;
+      return `**${brand.name}** ${money2(first.costPerFollower)} → ${money2(last.costPerFollower)} (${pctText(change(last.costPerFollower, first.costPerFollower))}, por ${cause})`;
+    }).filter(Boolean);
+    if (moves.length) parts.push(`Costo por seguidor de ${monthLong(report.keys[0])} a ${month}: ${list(moves)}.`);
     if (!parts.length) {
       const withColumn = report.brands.some(brand => brand.followers.some(item => item.hasColumn));
       return withColumn
@@ -809,12 +846,15 @@
       });
     });
     const last = report.keys.length - 1;
-    if (report.brands.some(brand => [brand.followers[last].nuevos, brand.followers[last].dejaron, brand.followers[last].total].includes(null))) {
+    if (report.brands.some(brand => brand.followers[last].nuevos === null || brand.followers[last].dejaron === null)) {
       items.push(report.hasInstagram
-        ? 'A alguna marca le faltan los seguidores totales, nuevos o bajas de Instagram: escríbelos en la lámina de seguidores (clic en la casilla).'
-        : 'Seguidores totales, nuevos y bajas: escríbelos en la lámina de seguidores (clic en la casilla), de Meta Business Suite &gt; Estadísticas &gt; Público &gt; Tendencias, o conecta Instagram al Web App (propiedades META_TOKEN e IG_USER_&lt;MARCA&gt;) para que lleguen solos. Los totales de los meses anteriores se escriben en la tabla de la lámina de evolución.');
+        ? 'A alguna marca le faltan los seguidores nuevos o las bajas de Instagram: escríbelos en la lámina de seguidores (clic en la casilla).'
+        : 'Seguidores nuevos y bajas: escríbelos en la lámina de seguidores (clic en la casilla), de Meta Business Suite &gt; Estadísticas &gt; Público &gt; Tendencias, o conecta Instagram al Web App (propiedades META_TOKEN e IG_USER_&lt;MARCA&gt;) para que lleguen solos.');
     }
     if (!report.hasCreatives) items.push('Sin miniaturas de los artes: sube las piezas a la carpeta "06 Artes" de cada marca en Drive (el nombre del archivo con el texto del anuncio) o pon el token de Meta en el Web App (propiedad META_TOKEN). Mientras tanto el formato se deduce de las reproducciones de 3 s.');
+    report.brands.forEach(brand => {
+      if (!brand.data?.artes?.piezas?.size && !brand.data?.creatives?.size) items.push(`<b>${esc(brand.name)}</b>: no tiene carpeta "06 Artes" junto a sus descargas; sus anuncios salen sin miniatura.`);
+    });
     report.brands.forEach(brand => {
       if (brand.data?.artes?.error) items.push(`<b>${esc(brand.name)}</b>: ${esc(brand.data.artes.error)}`);
     });
@@ -892,7 +932,7 @@
       ${foot}
     </div>`;
 
-  const head = (title, sub) => `<header class="rp-head"><h2>${esc(title)}</h2><p>${esc(sub)}</p></header>`;
+  const head = (title, sub, badge = '') => `<header class="rp-head${badge ? ' has-badge' : ''}"><div><h2>${esc(title)}</h2><p>${esc(sub)}</p></div>${badge ? `<span class="rp-date-badge">${icon('calendar')}${esc(badge)}</span>` : ''}</header>`;
 
   function footer(left, report, page, total) {
     return `
@@ -914,12 +954,13 @@
   // Puntos de un grafico mensual: valor del mes o null, con la razon cuando falta.
   const missingNote = point => (point.status !== 'ok' ? 'sin datos' : 'sin pauta');
 
-  // Inversion (barras), resultados y costo por resultado por mes, con su valor en cada punto. Un mes sin datos deja
-  // el hueco con su razon debajo del mes y la linea lo cruza punteada.
+  // Resultados y costo por resultado por mes, solo lineas (el equipo pidio quitar las barras), con el valor en cada
+  // punto y el mes del reporte resaltado. Un mes sin datos deja el hueco con su razon debajo y la linea lo cruza
+  // punteada.
   function evolutionChart(section) {
     const points = section.history;
-    const left = 112;
-    const right = 590;
+    const left = 46;
+    const right = 584;
     const x = index => left + ((right - left) * index) / Math.max(points.length - 1, 1);
     const lineMarks = (values, top, bottom, color, format) => {
       const max = Math.max(...values.filter(finite), 0) * 1.3 || 1;
@@ -939,25 +980,19 @@
         : '')).join('');
       return path + marks;
     };
-    const bars = (values, top, bottom) => {
-      const max = Math.max(...values.filter(finite), 0) * 1.3 || 1;
-      return values.map((value, index) => {
-        if (!finite(value)) return '';
-        const height = (value / max) * (bottom - top);
-        return `<rect x="${x(index) - 17}" y="${bottom - height}" width="34" height="${height}" rx="2" class="rp-bar-spend"/><text x="${x(index)}" y="${bottom - height - 5}" text-anchor="middle" class="rp-point" fill="#475569">${money(value)}</text>`;
-      }).join('');
-    };
-    const panel = (label, top, bottom, color, body) => `
-      <text x="8" y="${(top + bottom) / 2 + 3}" class="rp-chart-sub" fill="${color}">${esc(label)}</text>
-      <line x1="${left - 34}" x2="${right + 22}" y1="${bottom}" y2="${bottom}" class="rp-grid"/>
+    // Titulo de cada linea arriba a la izquierda, en su color, y la base del panel.
+    const panel = (label, titleY, bottom, color, body) => `
+      <text x="${left - 30}" y="${titleY}" class="rp-chart-line-title" fill="${color}">${esc(label)}</text>
+      <line x1="${left - 30}" x2="${right + 22}" y1="${bottom}" y2="${bottom}" class="rp-grid"/>
       ${body}`;
     const value = (field, point) => (point.has ? point.sum[field] : null);
+    const last = points.length - 1;
     return `
-      <svg class="rp-chart" viewBox="0 0 620 240" preserveAspectRatio="xMidYMin meet" role="img" aria-label="${esc(section.title)}: evolución por mes">
-        ${panel('Inversión', 22, 66, '#475569', bars(points.map(point => value('spend', point)), 22, 66))}
-        ${panel(section.noun, 96, 138, section.color, lineMarks(points.map(point => value('results', point)), 96, 138, section.color, compact))}
-        ${panel('Costo por resultado', 168, 208, COST_COLOR, lineMarks(points.map(point => value('costPerResult', point)), 168, 208, COST_COLOR, costShort))}
-        ${points.map((point, index) => `<text x="${x(index)}" y="${point.has ? 226 : 222}" text-anchor="middle" class="rp-axis"><tspan font-weight="700">${esc(monthShort(point.key))}</tspan></text>${point.has ? '' : `<text x="${x(index)}" y="233" text-anchor="middle" class="rp-axis-note">${missingNote(point)}</text>`}`).join('')}
+      <svg class="rp-chart" viewBox="0 0 620 248" preserveAspectRatio="xMidYMin meet" role="img" aria-label="${esc(section.title)}: evolución por mes">
+        <rect x="${x(last) - 30}" y="4" width="60" height="232" rx="6" class="rp-chart-current"/>
+        ${panel(section.noun, 18, 104, section.color, lineMarks(points.map(point => value('results', point)), 40, 104, section.color, compact))}
+        ${panel('Costo por resultado', 132, 214, COST_COLOR, lineMarks(points.map(point => value('costPerResult', point)), 152, 214, COST_COLOR, costShort))}
+        ${points.map((point, index) => `<text x="${x(index)}" y="${point.has ? 230 : 227}" text-anchor="middle" class="rp-axis${index === last ? ' rp-axis-current' : ''}"><tspan font-weight="700">${esc(monthShort(point.key))}</tspan></text>${point.has ? '' : `<text x="${x(index)}" y="239" text-anchor="middle" class="rp-axis-note">${missingNote(point)}</text>`}`).join('')}
       </svg>`;
   }
 
@@ -1020,18 +1055,20 @@
       </svg>`;
   }
 
-  function previewLink(ad) {
+  function previewLink(ad, label = 'Ver »') {
     const url = api().safeUrl(ad.link);
-    return url ? `<a href="${url}" target="_blank" rel="noopener">Ver »</a>` : '—';
+    return url ? `<a class="rp-link" href="${url}" target="_blank" rel="noopener">${esc(label)}</a>` : (label === 'Ver »' ? '—' : '');
   }
 
-  // Miniatura del arte (de "06 Artes" en Drive o, con token, de Meta) o un recuadro con el icono de su formato.
-  function thumb(ad) {
+  // Miniatura del arte (de "06 Artes" en Drive o, con token, de Meta) o un recuadro con el icono de su formato. size:
+  // clase extra para la miniatura grande de "Mejores anuncios".
+  function thumb(ad, size = '') {
     const iconName = FORMAT_ICON[ad.format] || 'image';
     const url = api().safeUrl(ad.thumb);
+    const big = size && url ? url.replace(/sz=w\d+/, 'sz=w320') : url;
     return url
-      ? `<span class="rp-thumb"><img src="${url}" alt="" referrerpolicy="no-referrer" data-fallback="${iconName}"></span>`
-      : `<span class="rp-thumb rp-thumb-ph">${icon(iconName)}</span>`;
+      ? `<span class="rp-thumb ${size}"><img src="${big}" alt="" referrerpolicy="no-referrer" data-fallback="${iconName}"></span>`
+      : `<span class="rp-thumb rp-thumb-ph ${size}">${icon(iconName)}</span>`;
   }
 
   // ── Laminas ────────────────────────────────────────────────────────────
@@ -1097,55 +1134,66 @@
     const last = report.keys.length - 1;
     const current = report.followers[last];
     const prev = report.prevFollowersIndex !== null ? report.followers[report.prevFollowersIndex] : null;
-    const rows = report.brands.map(brand => {
+    // La plantilla del equipo: cinco KPIs (nuevos, bajas, netos, de pauta, organico), la tabla de seguidores por marca y
+    // al lado la del costo por seguidor (inversion en Trafico al perfil ÷ seguidores de pauta de todas las campañas).
+    const followerRows = report.brands.map(brand => {
       const item = brand.followers[last];
-      const before = brand.followers.slice(0, last).reverse().find(point => finite(point.costPerFollower));
       return `
         <tr>
           <td class="rp-name"><i class="rp-dot" style="background:${brand.color}"></i>${esc(brand.name)}</td>
-          <td class="num"><b>${numberCell(`seg:${brand.key}:total`, item.total, num(item.total), item.fromInstagram && !item.typedTotal)}</b></td>
           <td class="num">${numberCell(`seg:${brand.key}:nuevos`, item.nuevos, num(item.nuevos), item.fromInstagram && !item.typedNuevos)}</td>
           <td class="num rp-bad">${numberCell(`seg:${brand.key}:dejaron`, item.dejaron, item.dejaron ? `-${num(item.dejaron)}` : '0', item.fromInstagram && !item.typedDejaron)}</td>
           <td class="num"><b>${signed(item.netos)}</b></td>
           <td class="num rp-blue">${num(item.paid)}</td>
           <td class="num rp-orange">${num(item.organico)}</td>
+        </tr>`;
+    }).join('');
+    const costRows = report.brands.map(brand => {
+      const item = brand.followers[last];
+      return `
+        <tr>
+          <td class="rp-name"><i class="rp-dot" style="background:${brand.color}"></i>${esc(brand.name)}</td>
           <td class="num">${money(item.trafficSpend)}</td>
+          <td class="num">${num(item.paid)}</td>
           <td class="num"><b>${money2(item.costPerFollower)}</b></td>
-          <td class="num">${before ? deltaCell(change(item.costPerFollower, before.costPerFollower), 'down') : '<span class="rp-faint">—</span>'}</td>
         </tr>`;
     }).join('');
     const missing = report.brands.filter(brand => !brand.followers[last].hasColumn).map(brand => brand.name);
-    const sourceNote = report.hasInstagram ? 'Nuevos y bajas: Instagram.' : 'Nuevos y bajas: Meta Business Suite.';
     // Sin la cifra de alguna marca el total no existe: se dice que falta, no que no hay mes anterior.
     const lacking = `<span class="rp-delta muted">Falta el dato de ${report.hasInstagram ? 'Instagram' : 'Meta Business Suite'}</span>`;
-    const beforeTotal = report.prevTotalIndex !== null ? report.followers[report.prevTotalIndex] : null;
-    const totalNote = current.total === null
-      ? lacking
-      : beforeTotal ? `<span class="rp-delta ${current.total >= beforeTotal.total ? 'good' : 'bad'}">${signed(current.total - beforeTotal.total)} vs ${esc(monthShort(beforeTotal.key).toLowerCase())}</span>` : '<span class="rp-delta muted">Al cierre del mes</span>';
-    const missingAny = report.brands.some(brand => [brand.followers[last].total, brand.followers[last].nuevos, brand.followers[last].dejaron].includes(null));
+    const caption = text => `<span class="rp-delta muted">${text}</span>`;
+    const missingAny = report.brands.some(brand => brand.followers[last].nuevos === null || brand.followers[last].dejaron === null);
     return `
       <section class="rp-page">
-        ${head('Crecimiento de seguidores', `Total, nuevos, bajas, de pauta y orgánicos · costo por seguidor · ${report.labels.window}`)}
+        ${head('Crecimiento de seguidores', `Nuevos, de pauta y orgánicos · costo por seguidor (Tráfico al perfil) · ${report.labels.window}`, report.labels.badge)}
         <div class="rp-body">
-          <div class="rp-grid-6">
-            ${kpi('Seguidores totales', num(current.total), totalNote)}
-            ${kpi('Nuevos', num(current.nuevos), current.nuevos === null ? lacking : delta(change(current.nuevos, prev?.nuevos), prev?.nuevos != null ? prev.key : null, 'up'))}
-            ${kpi('Bajas', current.dejaron === null ? '—' : `-${num(current.dejaron)}`, current.dejaron === null ? lacking : delta(change(current.dejaron, prev?.dejaron), prev?.dejaron != null ? prev.key : null, 'down'))}
-            ${kpi('Netos', signed(current.netos), current.netos === null ? lacking : '<span class="rp-delta muted">Nuevos − bajas</span>')}
-            ${kpi('De pauta', num(current.paid), delta(change(current.paid, prev?.paid), prev?.key, 'up'))}
-            ${kpi('Costo por seguidor', money2(current.costPerFollower), delta(change(current.costPerFollower, prev?.costPerFollower), prev?.key, 'down'))}
+          <div class="rp-grid-5">
+            ${kpi('Nuevos', num(current.nuevos), current.nuevos === null ? lacking : caption('Nos siguieron'))}
+            ${kpi('Dejaron', current.dejaron === null ? '—' : `-${num(current.dejaron)}`, current.dejaron === null ? lacking : caption('Nos dejaron'))}
+            ${kpi('Netos', signed(current.netos), current.netos === null ? lacking : caption('Nuevos − bajas'))}
+            ${kpi('De pauta', num(current.paid), current.paid === null ? lacking : caption(prev?.paid ? `${pctText(change(current.paid, prev.paid))} vs ${esc(monthShort(prev.key).toLowerCase())}` : 'Todas las campañas'))}
+            ${kpi('Orgánico', num(current.organico), current.organico === null ? lacking : caption('Nuevos − pauta'))}
           </div>
-          <div class="rp-card rp-table-card">
-            <div class="rp-card-title">Seguidores por marca</div>
-            <table class="rp-table">
-              <colgroup><col style="width:15%"><col><col><col><col><col><col><col style="width:12%"><col style="width:11%"><col style="width:9%"></colgroup>
-              <thead><tr><th>Marca</th><th class="num">Total</th><th class="num">Nuevos</th><th class="num">Bajas</th><th class="num">Netos</th><th class="num">De pauta</th><th class="num">Orgánico</th><th class="num">Inv. tráfico</th><th class="num">Costo/seg.</th><th class="num">Var.</th></tr></thead>
-              <tbody>${rows}</tbody>
-            </table>
-            <div class="rp-table-foot">Total = seguidores al cierre del mes. De pauta = seguidores que trajeron los anuncios de todas las campañas. Costo por seguidor = inversión en Tráfico al perfil ÷ seguidores de pauta. Orgánico = nuevos − de pauta. ${sourceNote}${missing.length ? ` La descarga de ${esc(list(missing))} no trae la columna de seguidores.` : ''}</div>
+          <div class="rp-split rp-split-followers">
+            <div class="rp-card rp-table-card">
+              <div class="rp-card-title">Seguidores por marca</div>
+              <table class="rp-table">
+                <thead><tr><th>Marca</th><th class="num">Nuevos</th><th class="num">Bajas</th><th class="num">Netos</th><th class="num">Pauta</th><th class="num">Orgánico</th></tr></thead>
+                <tbody>${followerRows}</tbody>
+              </table>
+              <div class="rp-table-foot">Orgánico = nuevos − los que trajo la pauta (sin descontar bajas). Nuevos y bajas: ${report.hasInstagram ? 'Instagram' : 'Meta Business Suite'}.</div>
+            </div>
+            <div class="rp-card rp-table-card">
+              <div class="rp-card-title">Costo por seguidor (Tráfico al perfil)</div>
+              <table class="rp-table">
+                <thead><tr><th>Marca</th><th class="num">Inversión</th><th class="num">Seg.</th><th class="num">Costo/seg.</th></tr></thead>
+                <tbody>${costRows}</tbody>
+              </table>
+              <div class="rp-table-foot">Costo/seg. = inversión en Tráfico al perfil ÷ seguidores de pauta de todas las campañas.${missing.length ? ` La descarga de ${esc(list(missing))} no trae la columna de seguidores.` : ''}</div>
+            </div>
           </div>
-          ${missingAny && api().teamMode() ? '<p class="rp-hint">Escribe en la tabla las cifras de cada marca (clic en la casilla). Salen de Meta Business Suite &gt; Estadísticas &gt; Público &gt; Tendencias, con la cuenta de Instagram y el mes completo: <b>Total</b> = Seguidores (total), <b>Nuevos</b> = Seguimientos, <b>Bajas</b> = Personas que dejaron de seguirte. Netos y orgánico se calculan solos. Esta indicación no sale en el PDF.</p>' : ''}
-          ${insight('Clave', 'user', 'seg:clave2', noteOr(notes, 'seg:clave2', suggestFollowersKey(report)))}
+          ${missingAny && api().teamMode() ? '<p class="rp-hint">Escribe en la tabla los nuevos y las bajas de cada marca (clic en la casilla). Salen de Meta Business Suite &gt; Estadísticas &gt; Público &gt; Tendencias, con la cuenta de Instagram y el mes completo: <b>Nuevos</b> = Seguimientos, <b>Bajas</b> = Personas que dejaron de seguirte. Netos y orgánico se calculan solos. Esta indicación no sale en el PDF.</p>' : ''}
+          ${insight('Clave', 'user', 'seg:clave3', noteOr(notes, 'seg:clave3', suggestFollowersKey(report)))}
         </div>
         ${footer(report.labels.followersSource, report, page, total)}
       </section>`;
@@ -1153,109 +1201,109 @@
 
   function followersEvolutionPage(report, notes, page, total) {
     const keys = report.keys;
+    const trend = followersTrend(report);
+    const month = monthShort(trend.current.key).toUpperCase();
     const empty = keys.map((_, index) => (report.brands.every(brand => brand.followers[index].paid === null) ? 'sin datos' : ''));
-    const noTotal = keys.map((_, index) => (report.brands.every(brand => brand.followers[index].total === null) ? 'sin dato' : ''));
-    // Tres graficos en fila: el total de la cuenta, los seguidores que trajo la pauta y lo que costo cada uno.
-    const chartWidth = 430;
+    // Graficos solo de lineas (lo pidio el equipo): seguidores de pauta y costo por seguidor de cada marca por mes.
+    const chartWidth = 620;
     const lines = pick => report.brands.map(brand => ({ name: brand.name, color: brand.color, values: brand.followers.map(pick) }));
-    const totalChart = seriesChart('Seguidores totales por mes', keys, lines(item => item.total), num, noTotal, chartWidth);
-    const paidChart = seriesChart('Seguidores nuevos de pauta', keys, lines(item => item.paid), num, empty, chartWidth);
+    const paidChart = seriesChart('Seguidores de pauta por mes', keys, lines(item => item.paid), num, empty, chartWidth);
     const costChart = seriesChart('Costo por seguidor por mes', keys, lines(item => item.costPerFollower), money2, empty, chartWidth);
-    const cell = item => (item.status !== 'ok' || !item.hasColumn ? '<span class="rp-faint">Sin datos</span>' : '');
     const rows = report.brands.map(brand => {
       const values = brand.followers;
       const lastItem = values[values.length - 1];
       const earlier = values.slice(0, -1).filter(item => finite(item.costPerFollower));
       const avgCost = earlier.length ? earlier.reduce((total, item) => total + item.trafficSpend, 0) / earlier.reduce((total, item) => total + item.paid, 0) : null;
-      // Cada mes: el total (se escribe ahi mismo, en el mes de su columna) y debajo pauta · costo por seguidor.
       return `
         <tr>
           <td class="rp-name"><i class="rp-dot" style="background:${brand.color}"></i>${esc(brand.name)}</td>
-          ${values.map(item => `<td class="num"><b>${numberCell(`seg:${brand.key}:total`, item.total, num(item.total), item.fromInstagram && !item.typedTotal, item.key)}</b><small class="rp-cell-sub">${cell(item) || `${num(item.paid)} de pauta · ${money2(item.costPerFollower)}`}</small></td>`).join('')}
+          ${values.map((item, index) => `<td class="num${index === values.length - 1 ? ' rp-strong' : ''}">${item.status !== 'ok' || !item.hasColumn ? '<span class="rp-faint">Sin datos</span>' : num(item.paid)}</td>`).join('')}
+          <td class="num"><b>${money2(lastItem.costPerFollower)}</b></td>
           <td class="num">${deltaCell(change(lastItem.costPerFollower, avgCost), 'down')}</td>
         </tr>`;
     }).join('');
+    const kpiCaption = text => `<span class="rp-delta muted">${esc(text)}</span>`;
     return `
       <section class="rp-page">
-        ${head('Evolución de seguidores y costo por seguidor', `Últimos ${keys.length} meses · ${list(keys.map(monthLong))}`)}
+        ${head('Evolución de seguidores y costo', `Seguidores por pauta y costo por seguidor, mes a mes · ${monthShort(keys[0]).toLowerCase()} – ${monthShort(keys[keys.length - 1]).toLowerCase()}`, report.labels.badge)}
         <div class="rp-body">
-          <div class="rp-split rp-split-3 rp-charts-row">
-            <div class="rp-card rp-chart-card">${totalChart}</div>
+          <div class="rp-grid-4 rp-kpis-compact">
+            ${kpi(`Seguidores ${month}`, num(trend.current.paid), kpiCaption(trend.avgPaid !== null ? `vs ${num(trend.avgPaid)} prom. ${trend.span}` : 'De pauta, todas las campañas'))}
+            ${kpi(`Costo/seg. ${month}`, money2(trend.current.costPerFollower), kpiCaption(trend.lowest ? 'El más bajo del periodo' : trend.avgCost !== null ? `vs ${money2(trend.avgCost)} prom. ${trend.span}` : 'Inversión Tráfico ÷ seguidores'))}
+            ${kpi('Crecimiento', trend.growth !== null ? `x${decimals(trend.growth, 1)}` : '—', kpiCaption(trend.growth !== null ? `vs prom. ${trend.span}` : 'Sin meses anteriores con dato'))}
+            ${kpi('Mejora de costo', trend.costChange !== null ? pctText(trend.costChange) : '—', kpiCaption(trend.costChange !== null ? 'Costo/seg. vs prom.' : 'Sin meses anteriores con dato'))}
+          </div>
+          <div class="rp-split rp-split-even rp-charts-row rp-charts-short">
             <div class="rp-card rp-chart-card">${paidChart}</div>
             <div class="rp-card rp-chart-card">${costChart}</div>
           </div>
           <div class="rp-card rp-table-card">
+            <div class="rp-card-title">Seguidores por pauta por marca <span class="rp-card-note">· costo/seg. de ${esc(monthLong(trend.current.key))}</span></div>
             <table class="rp-table rp-month-table rp-followers-table">
-              <colgroup><col style="width:16%">${keys.map(() => '<col>').join('')}<col style="width:13%"></colgroup>
-              <thead><tr><th>Marca</th>${keys.map(key => `<th class="num">${esc(capital(monthLong(key)))}</th>`).join('')}<th class="num">Costo vs prom.</th></tr></thead>
+              <colgroup><col style="width:16%">${keys.map(() => '<col>').join('')}<col style="width:13%"><col style="width:11%"></colgroup>
+              <thead><tr><th>Marca</th>${keys.map(key => `<th class="num">${esc(monthShort(key))}</th>`).join('')}<th class="num">Costo/seg.</th><th class="num">vs prom.</th></tr></thead>
               <tbody>${rows}</tbody>
             </table>
-            <div class="rp-table-foot">Cada mes: seguidores totales al cierre y, debajo, de pauta · costo por seguidor. "Costo vs prom.": último mes contra el promedio de los anteriores.</div>
+            <div class="rp-table-foot">Costo/seg. = inversión en Tráfico al perfil ÷ seguidores de pauta del mes (todas las campañas). "vs prom." contra los meses anteriores.</div>
           </div>
-          ${insight('Evolución', 'trend', 'seg:evol', noteOr(notes, 'seg:evol', suggestFollowersEvolution(report)))}
+          ${insight('Evolución', 'trend', 'seg:evol2', noteOr(notes, 'seg:evol2', suggestFollowersEvolution(report)), 'rp-insight-tight')}
         </div>
         ${footer(report.labels.followersSource, report, page, total)}
       </section>`;
   }
 
-  function monthTable(section) {
-    const lastIndex = section.history.length - 1;
-    const rows = section.history.map((point, index) => {
-      const name = esc(capital(monthLong(point.key)));
-      if (!point.has) return `<tr class="rp-off"><td>${name}</td><td colspan="5" class="rp-missing">${point.status !== 'ok' ? 'Sin datos cargados' : 'Sin pauta en este objetivo'}</td></tr>`;
-      const sum = point.sum;
-      return `<tr${index === lastIndex ? ' class="rp-current"' : ''}><td>${name}</td><td class="num">${money(sum.spend)}</td><td class="num">${num(sum.results)}</td><td class="num">${cost(sum.costPerResult)}</td><td class="num">${money2(sum.cpm)}</td><td class="num">${rateText(sum.rate)}</td></tr>`;
-    }).join('');
-    const avg = section.avg;
-    const sum = section.sum;
-    const versus = avg ? `
-      <tr class="rp-vs">
-        <td>vs prom.</td>
-        <td class="num">${deltaCell(change(sum.spend, avg.spend))}</td>
-        <td class="num">${deltaCell(change(sum.results, avg.results), 'up')}</td>
-        <td class="num">${deltaCell(change(sum.costPerResult, avg.costPerResult), 'down')}</td>
-        <td class="num">${deltaCell(change(sum.cpm, avg.cpm), 'down')}</td>
-        <td class="num">${deltaCell(change(sum.rate, avg.rate), 'up')}</td>
-      </tr>` : '';
-    return `
-      <table class="rp-table rp-month-table">
-        <colgroup><col style="width:20%"><col><col><col style="width:19%"><col><col style="width:15%"></colgroup>
-        <thead><tr><th>Mes</th><th class="num">Inversión</th><th class="num">${esc(section.abbr)}</th><th class="num">Costo</th><th class="num">CPM</th><th class="num">× mil impr.</th></tr></thead>
-        <tbody>${rows}${versus}</tbody>
-      </table>
-      <div class="rp-table-foot">${avg ? `Promedio de ${esc(list(section.previous.map(point => monthLong(point.key))))}. ` : ''}"× mil impr." = ${esc(section.unit)} por cada mil impresiones: mide cuánto responde la gente a los artes.</div>`;
+  // Los anuncios que mas lograron en el objetivo, con su pieza: como la tarjeta "Mejores anuncios" de la plantilla.
+  function bestAdsHtml(section) {
+    const top = section.ads.filter(ad => ad.score > 0).slice(0, BEST_ADS);
+    if (!top.length) return '<p class="rp-best-empty">Ningún anuncio registró resultados en el mes.</p>';
+    return top.map((ad, index) => `
+      <div class="rp-best${index === 0 ? ' is-first' : ''}">
+        ${thumb(ad, 'rp-thumb-lg')}
+        <div class="rp-best-text">
+          <b title="${esc(ad.name)}">${esc(ad.name)}</b>
+          <span>Gastó ${money(ad.spend)} · <b>${num(ad.score)}</b> ${esc(section.byFollows ? 'seguidores' : section.abbr.toLowerCase())}${ad.format ? ` · ${esc(ad.format.toLowerCase())}` : ''}</span>
+          <span class="rp-best-cost">${cost(ad.scoreCost)}${section.byFollows ? ' por seguidor' : ` por ${esc(section.one)}`}${ad.index ? ` · ${deltaCell(ad.index - 1, 'down')} vs prom.` : ''}</span>
+          ${previewLink(ad, 'Ver anuncio »')}
+        </div>
+      </div>`).join('');
   }
 
+  // Estructura de la plantilla del equipo: KPIs, la evolucion en lineas (resultados y costo), los mejores anuncios con
+  // su pieza y el analisis de que funciono, que no y por que.
   function sectionPage(brand, section, report, notes, page, total) {
     const { sum, prev } = section;
     const prevKey = prev?.key;
     const before = prev?.sum;
+    const follows = section.key === 'trafico-perfil' && section.current.brandFollows !== null;
     return `
       <section class="rp-page">
-        ${head(`${brand.name} · ${section.title}`, `${section.sub} · ${report.labels.window}`)}
+        ${head(`${brand.name} · ${section.title}`, `${section.sub} · ${report.labels.window}`, report.labels.badge)}
         <div class="rp-body">
           <div class="rp-grid-6">
             ${kpi('Inversión', money(sum.spend), delta(change(sum.spend, before?.spend), prevKey))}
             ${kpi(section.noun, num(sum.results), delta(change(sum.results, before?.results), prevKey, 'up'))}
             ${kpi('Costo/result.', cost(sum.costPerResult), delta(section.costChange, prevKey, 'down'))}
             ${kpi('CPM', money2(sum.cpm), delta(change(sum.cpm, before?.cpm), prevKey, 'down'))}
-            ${section.key === 'trafico-perfil' && section.found.includes('follows')
-              ? kpi('Seguidores', num(sum.follows), delta(prev?.found.includes('follows') ? change(sum.follows, before.follows) : null, prevKey, 'up'))
+            ${follows
+              ? kpi('Seguidores de pauta', num(section.current.brandFollows), delta(prev?.brandFollows ? change(section.current.brandFollows, prev.brandFollows) : null, prevKey, 'up'))
               : kpi('Alcance', num(sum.reach), delta(change(sum.reach, before?.reach), prevKey, 'up'))}
-            ${kpi('× mil impr.', rateText(sum.rate), delta(change(sum.rate, before?.rate), prevKey, 'up'))}
+            ${follows && section.current.brandFollows > 0
+              ? kpi('Costo/seguidor', money2(sum.spend / section.current.brandFollows), '<span class="rp-delta muted">Inversión ÷ seguidores (todas)</span>')
+              : kpi('Frecuencia', finite(sum.frequency) ? decimals(sum.frequency, 2) : '—', delta(change(sum.frequency, before?.frequency), prevKey))}
           </div>
-          <div class="rp-split">
+          <div class="rp-split rp-split-section">
             <div class="rp-card rp-chart-card">
               <div class="rp-card-title">Evolución ${report.labels.days ? `${esc(report.labels.days)} ` : ''}por mes</div>
-              <div class="rp-card-sub">Inversión, ${esc(section.unit)} y costo por resultado · ${esc(section.history.map(point => monthShort(point.key).toLowerCase()).join('–'))}</div>
+              <div class="rp-card-sub">${esc(capital(section.unit))} y costo por resultado · ${esc(section.history.map(point => monthShort(point.key).toLowerCase()).join('–'))}</div>
               ${evolutionChart(section)}
             </div>
-            <div class="rp-card rp-table-card">
-              <div class="rp-card-title">Mes a mes</div>
-              ${monthTable(section)}
+            <div class="rp-card rp-best-card">
+              <div class="rp-card-title">Mejores anuncios</div>
+              <div class="rp-card-sub">Los que más ${esc(section.byFollows ? 'seguidores' : section.unit)} generaron en el mes</div>
+              <div class="rp-best-list">${bestAdsHtml(section)}</div>
             </div>
           </div>
-          ${insight('Por qué cambió', 'search', `why:${brand.key}:${section.key}`, noteOr(notes, `why:${brand.key}:${section.key}`, suggestWhy(section)), 'rp-insight-tight')}
+          ${insight('Qué funcionó y por qué', 'search', `sec:${brand.key}:${section.key}`, noteOr(notes, `sec:${brand.key}:${section.key}`, suggestSection(section)), 'rp-insight-tight')}
         </div>
         ${footer(report.labels.source, report, page, total)}
       </section>`;
@@ -1267,7 +1315,6 @@
     const follows = section.key === 'trafico-perfil' && section.found.includes('follows');
     const detail = section.key === 'interaccion' && section.found.includes('plays3s') ? ENGAGEMENT.filter(([field]) => section.found.includes(field)) : [];
     const rows = shown.map(ad => {
-      const verdict = VERDICTS[ad.verdict];
       const tags = `${ad.format ? `<span class="rp-pill">${esc(ad.format)}</span>` : ''}${ad.isNew ? '<span class="rp-pill new">Nuevo</span>' : ''}`;
       const sub = detail.length ? `<small>${detail.map(([field, label]) => `${field === 'plays3s' ? compact(ad[field]) : num(ad[field])} ${label}`).join(' · ')}</small>` : '';
       return `
@@ -1278,7 +1325,6 @@
           <td class="num">${cost(ad.cost)}</td>
           ${follows ? `<td class="num">${num(ad.follows)}</td><td class="num">${ad.follows > 0 ? money2(ad.spend / ad.follows) : '<span class="rp-faint">—</span>'}</td>` : ''}
           <td class="num">${ad.index ? deltaCell(ad.index - 1, 'down') : '<span class="rp-faint">—</span>'}</td>
-          <td><span class="rp-verdict ${verdict.tone}">${verdict.label}</span></td>
           <td class="num">${previewLink(ad)}</td>
         </tr>`;
     }).join('');
@@ -1293,21 +1339,21 @@
       </div>` : '';
     return `
       <section class="rp-page">
-        ${head(`${brand.name} · ${section.title} · Artes`, `Qué arte funcionó, en qué formato y qué hacer con cada uno · ${report.labels.window}`)}
+        ${head(`${brand.name} · ${section.title} · Artes`, `Qué arte funcionó, en qué formato y por qué · ${report.labels.window}`, report.labels.badge)}
         <div class="rp-body">
           <div class="rp-card rp-table-card">
             <table class="rp-table rp-arts">
-              <colgroup><col><col style="width:9%"><col style="width:8%"><col style="width:10%">${follows ? '<col style="width:7%"><col style="width:9%">' : ''}<col style="width:8%"><col style="width:10%"><col style="width:6%"></colgroup>
-              <thead><tr><th>Arte</th><th class="num">Inversión</th><th class="num">${esc(section.abbr)}</th><th class="num">${follows ? 'Costo/visita' : 'Costo/result.'}</th>${follows ? '<th class="num">Seguid.</th><th class="num">Costo/seg.</th>' : ''}<th class="num">vs prom.</th><th>Veredicto</th><th class="num">Ver</th></tr></thead>
+              <colgroup><col><col style="width:10%"><col style="width:9%"><col style="width:11%">${follows ? '<col style="width:8%"><col style="width:10%">' : ''}<col style="width:9%"><col style="width:7%"></colgroup>
+              <thead><tr><th>Arte</th><th class="num">Inversión</th><th class="num">${esc(section.abbr)}</th><th class="num">${follows ? 'Costo/visita' : 'Costo/result.'}</th>${follows ? '<th class="num">Seguid.</th><th class="num">Costo/seg.</th>' : ''}<th class="num">vs prom.</th><th class="num">Ver</th></tr></thead>
               <tbody>${rows}</tbody>
             </table>
             <div class="rp-table-foot">${section.byFollows
-              ? `Promedio del objetivo: ${cost(section.sum.costPerResult)} por visita y ${money2(section.score.cost)} por seguidor; aquí se busca seguidores, así que "vs prom." y el veredicto van por el costo por seguidor.`
-              : `Promedio del objetivo: ${cost(section.sum.costPerResult)} por ${esc(section.one)}.`} Replicar = 20% o más barato que el promedio; Ajustar = 15% o más caro; Descartar = 50% o más caro con inversión relevante; Renovar = ya corría y su costo subió 40% o más.${rest.length ? ` ${rest.length} artes más con ${money(restSpend)} de inversión.` : ''}</div>
+              ? `Promedio del objetivo: ${cost(section.sum.costPerResult)} por visita y ${money2(section.score.cost)} por seguidor (inversión en Tráfico al perfil ÷ seguidores de todas las campañas); "vs prom." va por el costo por seguidor.`
+              : `Promedio del objetivo: ${cost(section.sum.costPerResult)} por ${esc(section.one)}; "vs prom." compara el costo de cada arte con ese promedio.`}${rest.length ? ` ${rest.length} artes más con ${money(restSpend)} de inversión.` : ''}</div>
           </div>
           <div class="rp-split ${formats ? 'rp-split-arts' : 'rp-split-single'}">
             ${formats}
-            ${insight('Qué funciona', 'trend', `art:${brand.key}:${section.key}`, noteOr(notes, `art:${brand.key}:${section.key}`, suggestArts(section)))}
+            ${insight('Qué funcionó, qué no y por qué', 'trend', `art2:${brand.key}:${section.key}`, noteOr(notes, `art2:${brand.key}:${section.key}`, suggestArts(section)))}
           </div>
         </div>
         ${footer(report.labels.source, report, page, total)}
