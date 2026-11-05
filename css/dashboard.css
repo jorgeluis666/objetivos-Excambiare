@@ -4625,7 +4625,7 @@ button.topbar-pill[aria-expanded="true"] .status-chevron {
 
 /* Evolucion de seguidores: los dos graficos de lineas, mas bajos para que entren KPIs, tabla y texto. */
 .rp-charts-row.rp-charts-short {
-  height: 126px;
+  height: 140px;
 }
 
 .rp-kpis-compact .rp-kpi {

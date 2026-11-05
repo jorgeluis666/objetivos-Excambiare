@@ -998,12 +998,14 @@
 
   // Una linea por marca con el valor en cada punto. Las etiquetas de un mismo mes que chocan se reparten arriba, abajo
   // y al costado del punto. Un mes sin datos de ninguna marca lo dice bajo el mes. Leyenda arriba a la derecha.
-  // width: ancho del dibujo; tres graficos en fila van mas angostos para que el texto no se achique.
-  function seriesChart(label, keys, series, format, notes = [], width = 620) {
+  // width/height: tamano del dibujo; debe seguir la forma de la tarjeta para que el grafico la llene (en una tarjeta
+  // baja, un dibujo alto se encoge al centro).
+  function seriesChart(label, keys, series, format, notes = [], width = 620, height = 236) {
+    const compact = height < 200;
     const left = 46;
     const right = width - 36;
-    const top = 44;
-    const bottom = 200;
+    const top = compact ? 34 : 44;
+    const bottom = height - (compact ? 28 : 36);
     const x = index => left + ((right - left) * index) / Math.max(keys.length - 1, 1);
     const known = series.flatMap(item => item.values.filter(finite));
     const max = Math.max(...known, 0) * 1.25 || 1;
@@ -1026,18 +1028,25 @@
         .filter(item => finite(item.values[index]))
         .map(item => ({ item, y: y(item.values[index]) }))
         .sort((left, right) => left.y - right.y);
-      // Dentro de un grupo de puntos cercanos: el primero lleva la etiqueta arriba, el segundo al costado (hacia
-      // adentro del grafico en el ultimo mes) y el tercero abajo.
+      const dot = point => `<circle cx="${x(index)}" cy="${point.y}" r="3.5" fill="#fff" stroke="${point.item.color}" stroke-width="2"/>`;
+      // Ultimo mes: etiquetas a la izquierda del punto, apiladas a 11 de distancia y subidas si pasan el eje.
+      if (index === keys.length - 1) {
+        const ys = [];
+        points.forEach((point, order) => ys.push(Math.max(point.y + 4, order ? ys[order - 1] + 11 : -Infinity)));
+        const lift = Math.max(0, ys[ys.length - 1] - (bottom + 2));
+        return points.map((point, order) => `${dot(point)}<text x="${x(index) - 8}" y="${Math.max(ys[order] - lift, top - 4 + order * 11)}" text-anchor="end" class="rp-point" fill="${point.item.color}">${format(point.item.values[index])}</text>`).join('');
+      }
+      // Dentro de un grupo de puntos cercanos: el primero lleva la etiqueta arriba, el segundo al costado y el tercero
+      // abajo.
       let slot = 0;
       return points.map((point, order) => {
         slot = order > 0 && point.y - points[order - 1].y < 14 ? slot + 1 : 0;
-        const side = index === keys.length - 1 ? -1 : 1;
         const place = [
           { dx: 0, dy: -8, anchor: 'middle' },
-          { dx: 8 * side, dy: 4, anchor: side > 0 ? 'start' : 'end' },
+          { dx: 8, dy: 4, anchor: 'start' },
           { dx: 0, dy: 16, anchor: 'middle' },
         ][Math.min(slot, 2)];
-        return `<circle cx="${x(index)}" cy="${point.y}" r="3.5" fill="#fff" stroke="${point.item.color}" stroke-width="2"/><text x="${x(index) + place.dx}" y="${point.y + place.dy}" text-anchor="${place.anchor}" class="rp-point" fill="${point.item.color}">${format(point.item.values[index])}</text>`;
+        return `${dot(point)}<text x="${x(index) + place.dx}" y="${point.y + place.dy}" text-anchor="${place.anchor}" class="rp-point" fill="${point.item.color}">${format(point.item.values[index])}</text>`;
       }).join('');
     }).join('');
     let legendX = right + 20;
@@ -1046,12 +1055,12 @@
       return `<rect x="${legendX}" y="10" width="9" height="9" rx="2" fill="${item.color}"/><text x="${legendX + 13}" y="18" class="rp-legend-text">${esc(item.name)}</text>`;
     }).join('');
     return `
-      <svg class="rp-chart" viewBox="0 0 ${width} 236" preserveAspectRatio="xMidYMin meet" role="img" aria-label="${esc(label)}">
+      <svg class="rp-chart" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMin meet" role="img" aria-label="${esc(label)}">
         <text x="${left - 30}" y="18" class="rp-chart-title">${esc(label)}</text>
         ${legend}
         ${[bottom, (top + bottom) / 2, top].map(level => `<line x1="${left - 30}" x2="${right + 22}" y1="${level}" y2="${level}" class="rp-grid"/>`).join('')}
         ${lines}${marks}
-        ${keys.map((key, index) => `<text x="${x(index)}" y="${notes[index] ? 216 : 220}" text-anchor="middle" class="rp-axis"><tspan font-weight="700">${esc(monthShort(key))}</tspan></text>${notes[index] ? `<text x="${x(index)}" y="227" text-anchor="middle" class="rp-axis-note">${esc(notes[index])}</text>` : ''}`).join('')}
+        ${keys.map((key, index) => `<text x="${x(index)}" y="${bottom + (notes[index] ? 14 : 18) + (compact ? 0 : 2)}" text-anchor="middle" class="rp-axis"><tspan font-weight="700">${esc(monthShort(key))}</tspan></text>${notes[index] ? `<text x="${x(index)}" y="${bottom + (compact ? 24 : 27)}" text-anchor="middle" class="rp-axis-note">${esc(notes[index])}</text>` : ''}`).join('')}
       </svg>`;
   }
 
@@ -1178,6 +1187,7 @@
             <div class="rp-card rp-table-card">
               <div class="rp-card-title">Seguidores por marca</div>
               <table class="rp-table">
+                <colgroup><col style="width:25%"><col span="5" style="width:15%"></colgroup>
                 <thead><tr><th>Marca</th><th class="num">Nuevos</th><th class="num">Bajas</th><th class="num">Netos</th><th class="num">Pauta</th><th class="num">Orgánico</th></tr></thead>
                 <tbody>${followerRows}</tbody>
               </table>
@@ -1205,10 +1215,11 @@
     const month = monthShort(trend.current.key).toUpperCase();
     const empty = keys.map((_, index) => (report.brands.every(brand => brand.followers[index].paid === null) ? 'sin datos' : ''));
     // Graficos solo de lineas (lo pidio el equipo): seguidores de pauta y costo por seguidor de cada marca por mes.
-    const chartWidth = 620;
+    // 620 x 146 sigue la forma de la tarjeta baja (.rp-charts-short, ~596 x 140).
+    const [chartWidth, chartHeight] = [620, 146];
     const lines = pick => report.brands.map(brand => ({ name: brand.name, color: brand.color, values: brand.followers.map(pick) }));
-    const paidChart = seriesChart('Seguidores de pauta por mes', keys, lines(item => item.paid), num, empty, chartWidth);
-    const costChart = seriesChart('Costo por seguidor por mes', keys, lines(item => item.costPerFollower), money2, empty, chartWidth);
+    const paidChart = seriesChart('Seguidores de pauta por mes', keys, lines(item => item.paid), num, empty, chartWidth, chartHeight);
+    const costChart = seriesChart('Costo por seguidor por mes', keys, lines(item => item.costPerFollower), money2, empty, chartWidth, chartHeight);
     const rows = report.brands.map(brand => {
       const values = brand.followers;
       const lastItem = values[values.length - 1];
