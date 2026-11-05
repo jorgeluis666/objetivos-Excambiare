@@ -5,7 +5,7 @@ de Inversiones Excambiare: **Sol y Tierra**, **Mex Cream** y **Gold Fusion**. Ca
 descargas y su carpeta de reportes; el tablero las muestra por separado (los resultados de una marca no se suman con
 los de otra). Montos en soles (`CURRENCY` en `js/data-source.js`).
 
-Version actual: `v2.10.2` (v1.x era el tablero anterior, sobre una hoja manual).
+Version actual: `v2.11.0` (v1.x era el tablero anterior, sobre una hoja manual).
 
 ## Versionado
 
@@ -202,7 +202,7 @@ adaptado por la marca. Sus estilos y los de impresion estan al final de `css/das
 
 ### Columnas opcionales del barrido
 
-`scripts/google-sheets-sync.gs` (version de barrido 3) suma, ademas de las columnas de siempre, estas de la
+`scripts/google-sheets-sync.gs` (version de barrido 4) suma, ademas de las columnas de siempre, estas de la
 descarga de Meta si vienen (cabeceras sin tildes ni mayusculas; se acepta cualquiera de la lista):
 
 | Campo | Cabecera de la descarga |
@@ -217,6 +217,29 @@ descarga de Meta si vienen (cabeceras sin tildes ni mayusculas; se acepta cualqu
 Cada mes del barrido trae `found` con las que encontro en su archivo. Para que lleguen: agregar esas columnas al
 informe de Meta Ads antes de descargarlo, y publicar el script nuevo (Implementar > Administrar implementaciones >
 editar > Nueva version). Si Meta las nombra distinto, se agrega el nombre a `RAW_COLUMNS`.
+
+### Datos desde Nexus
+
+Nexus (nexus.limaretail.com) escribe en la hoja del mes de cada cuenta una pestana propia, **Nexus Meta**, tres veces
+al dia (06:00, 13:00 y 18:00 de Lima). Fila 1: el contrato `NEXUS_META_V1`, la hora de captura, la cuenta, la moneda,
+el mes y el corte. Fila 2: las cabeceras en ingles. Despues, una fila por dia y nivel (campana, conjunto y anuncio).
+
+- **Cuando entra:** solo si la hoja del mes no trae la descarga de Meta, o la trae sin filas, como pasa con un mes que
+  Nexus creo desde la plantilla. Si hay descarga, manda la descarga y la pestana de Nexus no se lee. No se completan
+  dias sueltos con Nexus: esos dias llegarian sin seguidores y el costo por seguidor del mes saldria inflado.
+- **Que se lee:** solo las filas de nivel `ad` (los tres niveles repiten el mismo gasto), traducidas a las columnas de
+  la descarga. `name` pasa a ser el anuncio, `adset` el conjunto, `inline_link_clicks` los clics y `messages` las
+  conversaciones. `result_type` es el indicador crudo de Meta y se traduce al nombre de la descarga (ThruPlay,
+  Interacciones con la publicacion, Visitas al perfil de Instagram, Conversaciones con mensajes iniciadas).
+- **Que no trae:** seguimientos de Instagram, reproducciones de 3 s, desglose de interacciones, edad y sexo, y enlace
+  de vista previa. Un mes de Nexus llega con `found` vacio y `source: "nexus"`. El reporte lo trata como un mes sin
+  esas columnas y el recuadro del equipo lo avisa. Si Nexus agrega una columna `follows`, los seguidores entran solos.
+- **Requisitos en Nexus:** la cuenta en `meta_ads.sync_accounts` (config/local.php del servidor) y su destino de Drive
+  con `extended_fields` activado. Sin alcance ni resultados el mes queda con error ("activa extended_fields"), en vez
+  de mostrar dias en cero.
+- **Errores que se ven en el Archivo de Reportes:** pestana de otro mes, moneda distinta de PEN, columnas faltantes o
+  sin filas de anuncios.
+- `probarBarrido` dice en el registro que meses salieron de Nexus y hasta que dia.
 
 ### Meta en el Web App (opcional)
 

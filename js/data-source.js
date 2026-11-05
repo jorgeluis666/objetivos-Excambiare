@@ -315,6 +315,9 @@
       modifiedTime: String(raw.modifiedTime || ''),
       duplicates: Array.isArray(raw.duplicates) ? raw.duplicates.map(String) : [],
       found: Array.isArray(raw.found) ? raw.found.map(String).filter(field => OPTIONAL_FIELDS.includes(field)) : [],
+      // "nexus" si el mes salio de la pestana que escribe Nexus (sin descarga de Meta en la hoja); through es su corte.
+      source: raw.source === 'nexus' ? 'nexus' : 'meta',
+      through: /^\d{4}-\d{2}-\d{2}$/.test(String(raw.through || '')) ? String(raw.through) : '',
       error,
       outOfRange,
       rows,

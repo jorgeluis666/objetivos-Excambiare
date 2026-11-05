@@ -374,7 +374,7 @@
     const data = brandData(brand.key);
     const months = keys.map(key => {
       const { month, rows } = windowRows(brand.key, key, period);
-      return { key, status: monthStatus(brand.key, key), rows, found: month?.found || [], has: rows.some(activity), lastDay: month?.lastDay || null, daysInMonth: month?.daysInMonth || null };
+      return { key, status: monthStatus(brand.key, key), rows, found: month?.found || [], source: month?.source || 'meta', has: rows.some(activity), lastDay: month?.lastDay || null, daysInMonth: month?.daysInMonth || null };
     });
     const current = months[months.length - 1];
     // "Nuevo" solo se sabe contra el mes inmediato anterior: si falta (sin descarga), un arte de ese mes pareceria nuevo.
@@ -815,10 +815,16 @@
       brand.months.forEach((item, index) => {
         const closed = index < brand.months.length - 1 || report.period.closed;
         if (closed && item.status === 'ok' && item.has && item.lastDay && item.lastDay < item.daysInMonth) {
-          items.push(`<b>${esc(brand.name)}</b>: la descarga de ${esc(monthNames([item.key]))} llega hasta el día ${item.lastDay}; faltan ${item.daysInMonth - item.lastDay === 1 ? `el ${item.daysInMonth}` : `del ${item.lastDay + 1} al ${item.daysInMonth}`}. Volver a descargarla completa.`);
+          const missingDays = item.daysInMonth - item.lastDay === 1 ? `el ${item.daysInMonth}` : `del ${item.lastDay + 1} al ${item.daysInMonth}`;
+          items.push(item.source === 'nexus'
+            ? `<b>${esc(brand.name)}</b>: los datos de Nexus de ${esc(monthNames([item.key]))} llegan hasta el día ${item.lastDay}; faltan ${missingDays}. Revisar la última lectura de la cuenta en Nexus (Monitoreo).`
+            : `<b>${esc(brand.name)}</b>: la descarga de ${esc(monthNames([item.key]))} llega hasta el día ${item.lastDay}; faltan ${missingDays}. Volver a descargarla completa.`);
         }
       });
-      const noFollows = brand.months.filter(item => item.status === 'ok' && item.has && !item.found.includes('follows')).map(item => item.key);
+      // Un mes leido de Nexus (la hoja no trae la descarga de Meta) llega sin seguidores ni desglose de interacciones.
+      const fromNexus = brand.months.filter(item => item.status === 'ok' && item.has && item.source === 'nexus' && !item.found.includes('follows')).map(item => item.key);
+      if (fromNexus.length) items.push(`<b>${esc(brand.name)}</b>: ${esc(monthNames(fromNexus))} ${fromNexus.length > 1 ? 'salen' : 'sale'} de Nexus, que no trae los seguimientos de Instagram: queda sin seguidores de pauta ni costo por seguidor. Para tenerlos, sube a su carpeta la descarga de Meta del mes (el tablero la prefiere a Nexus).`);
+      const noFollows = brand.months.filter(item => item.status === 'ok' && item.has && item.source !== 'nexus' && !item.found.includes('follows')).map(item => item.key);
       if (noFollows.length) items.push(`<b>${esc(brand.name)}</b>: la descarga de ${esc(monthNames(noFollows))} no trae la columna "Seguimientos de Instagram": ese mes queda sin seguidores de pauta ni costo por seguidor.`);
       if (brand.data?.metaError) items.push(`<b>${esc(brand.name)}</b>: Meta respondió con error al pedir artes o seguidores (${esc(brand.data.metaError)}).`);
     });
