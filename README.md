@@ -5,7 +5,7 @@ de Inversiones Excambiare: **Sol y Tierra**, **Mex Cream** y **Gold Fusion**. Ca
 descargas y su carpeta de reportes; el tablero las muestra por separado (los resultados de una marca no se suman con
 los de otra). Montos en soles (`CURRENCY` en `js/data-source.js`).
 
-Version actual: `v2.11.0` (v1.x era el tablero anterior, sobre una hoja manual).
+Version actual: `v2.11.1` (v1.x era el tablero anterior, sobre una hoja manual).
 
 ## Versionado
 
@@ -149,8 +149,8 @@ y acentos en azul. No sigue a la marca elegida arriba: lleva MEX (Mex Cream), Go
 | Resumen ejecutivo | Inversion total, alcance, seguidores de pauta y costo por seguidor con su variacion; tabla marca x objetivo (inversion, resultados y costo por resultado con su variacion y la lectura: mejoro o empeoro, por los artes o por el CPM); "Lectura del mes". |
 | Crecimiento de seguidores | Plantilla del equipo: KPIs nuevos, dejaron, netos, de pauta y organico; tabla "Seguidores por marca" (nuevos, bajas, netos, pauta, organico) y al lado "Costo por seguidor (Trafico al perfil)" (inversion, seguidores, costo por seguidor); "Clave" (de los nuevos, cuantos trajo la pauta y cuantos llegaron solos; el neto real y la marca mas eficiente). |
 | Evolucion de seguidores | Plantilla del equipo: KPIs seguidores de pauta del mes contra el promedio de los anteriores, costo por seguidor del mes, crecimiento (veces el promedio) y mejora de costo; dos graficos de lineas (seguidores de pauta y costo por seguidor por marca); tabla de seguidores de pauta mes a mes con el costo por seguidor del mes y su variacion contra el promedio; "Evolucion". |
-| Por marca y objetivo: evolucion | Plantilla del equipo: 6 KPIs con su variacion (inversion, resultados, costo por resultado, CPM, alcance y frecuencia; en Trafico al perfil, seguidores de pauta y costo por seguidor); evolucion por mes solo en lineas (resultados y costo por resultado, con el mes del reporte resaltado); "Mejores anuncios" (los 3 que mas lograron, con su pieza, gasto, resultados, costo y enlace); "Que funciono y por que" (que paso con el costo y por que, que arte funciono y por que, cual no y por que, y el formato). |
-| Por marca y objetivo: artes | Hasta 6 artes con su pieza (o el icono de su formato), formato, nuevo, inversion, resultados, costo, comparacion contra el promedio y enlace, sin veredicto; en Interaccion, el desglose de cada arte; en Trafico, los seguidores y el costo por seguidor de cada arte; resultado por formato y "Que funciono, que no y por que" (gracias a que arte bajo el costo o por cual subio, por que rindio cada uno: respuesta por mil impresiones o costo de mostrarlo, y el formato). |
+| Por marca y objetivo: evolucion | Plantilla del equipo: 6 KPIs con su variacion (inversion, resultados, costo por resultado, CPM, alcance y frecuencia; en Trafico al perfil, seguidores de pauta y costo por seguidor); evolucion por mes solo en lineas (resultados y costo por resultado, con el mes del reporte resaltado); "Mejores anuncios" (los 3 que mas lograron, con su pieza, gasto, resultados, costo y enlace); "Analisis" (que paso con el costo y por que, que arte funciono y por que, cual no y por que, y el formato). |
+| Por marca y objetivo: artes | Hasta 6 artes con su pieza (o el icono de su formato), formato, nuevo, inversion, resultados, costo, comparacion contra el promedio y enlace, sin veredicto; en Interaccion, el desglose de cada arte; en Trafico, los seguidores y el costo por seguidor de cada arte; resultado por formato y "Analisis" (gracias a que arte bajo el costo o por cual subio, por que rindio cada uno: respuesta por mil impresiones o costo de mostrarlo, y el formato). |
 | Conclusiones | Seguidores, artes para replicar (y el formato que domina) y que movio los costos; nota del periodo. |
 | Proximos pasos | Una columna por marca con los artes a replicar, los que hay que descartar o ajustar y lo que toca el mes siguiente. |
 | Cierre | Logo y firma de Lima Retail. |

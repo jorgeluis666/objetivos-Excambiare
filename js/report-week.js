@@ -24,7 +24,7 @@
   const MAX_ADS = 6;
   // Largo del "Que funciona" de la lamina de artes (caracteres): mas texto empuja la tabla fuera de la lamina.
   const ARTS_TEXT_MAX = 620;
-  // Largo del analisis de la lamina de cada objetivo ("Que funciono y por que").
+  // Largo del recuadro "Analisis" de la lamina de cada objetivo (que funciono, que no y por que).
   const SECTION_TEXT_MAX = 720;
   // Mejores anuncios de la lamina de cada objetivo (con su pieza).
   const BEST_ADS = 3;
@@ -1320,7 +1320,7 @@
               <div class="rp-best-list">${bestAdsHtml(section)}</div>
             </div>
           </div>
-          ${insight('Qué funcionó y por qué', 'search', `sec:${brand.key}:${section.key}`, noteOr(notes, `sec:${brand.key}:${section.key}`, suggestSection(section)), 'rp-insight-tight')}
+          ${insight('Análisis', 'search', `sec:${brand.key}:${section.key}`, noteOr(notes, `sec:${brand.key}:${section.key}`, suggestSection(section)), 'rp-insight-tight')}
         </div>
         ${footer(report.labels.source, report, page, total)}
       </section>`;
@@ -1356,7 +1356,7 @@
       </div>` : '';
     return `
       <section class="rp-page">
-        ${head(`${brand.name} · ${section.title} · Artes`, `Qué arte funcionó, en qué formato y por qué · ${report.labels.window}`, report.labels.badge)}
+        ${head(`${brand.name} · ${section.title} · Artes`, `Resultados y costo de cada arte · ${report.labels.window}`, report.labels.badge)}
         <div class="rp-body">
           <div class="rp-card rp-table-card">
             <table class="rp-table rp-arts">
@@ -1370,7 +1370,7 @@
           </div>
           <div class="rp-split ${formats ? 'rp-split-arts' : 'rp-split-single'}">
             ${formats}
-            ${insight('Qué funcionó, qué no y por qué', 'trend', `art2:${brand.key}:${section.key}`, noteOr(notes, `art2:${brand.key}:${section.key}`, suggestArts(section)))}
+            ${insight('Análisis', 'trend', `art2:${brand.key}:${section.key}`, noteOr(notes, `art2:${brand.key}:${section.key}`, suggestArts(section)))}
           </div>
         </div>
         ${footer(report.labels.source, report, page, total)}
