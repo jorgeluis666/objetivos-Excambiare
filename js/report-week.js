@@ -70,6 +70,8 @@
   const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ICONS.pulse}</svg>`;
 
   let selectedMonth = '';
+  let reportMode = 'monthly';
+  const noteKey = (key, period) => period.closed ? key : `${key}:avance:1-${period.to}`;
   let wired = false;
 
   const api = () => window.ExcambiareData || null;
@@ -132,14 +134,24 @@
     const keys = new Set();
     BRANDS.forEach(brand => (brandData(brand.key)?.months || []).forEach(month => { if (month.hasData && !month.error) keys.add(month.key); }));
     const sorted = [...keys].sort().reverse();
+    const today = new Date(Date.now() - 5 * 3600000);
+    const currentKey = today.toISOString().slice(0, 7);
     return sorted.map((key, index) => {
       const [year, monthNumber] = key.split('-').map(Number);
       const days = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
       const months = BRANDS.map(brand => monthOf(brand.key, key)).filter(Boolean);
       const lastDay = Math.max(...months.map(month => month.lastDay || 0));
       // Un mes anterior al ultimo con datos ya termino aunque su descarga no llegue al ultimo dia.
-      const closed = index > 0 || lastDay === days;
-      const to = closed ? days : lastDay;
+      const closed = reportMode === 'monthly';
+      if (key > currentKey || (closed && key >= currentKey)) return null;
+      let to = days;
+      if (!closed) {
+        const yesterday = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - 1);
+        const end = new Date(Math.min(Date.UTC(year, monthNumber - 1, lastDay), yesterday));
+        end.setUTCDate(end.getUTCDate() - end.getUTCDay());
+        if (end.toISOString().slice(0, 7) !== key) return null;
+        to = end.getUTCDate();
+      }
       const name = api().MONTHS[monthNumber - 1];
       const short = api().SHORT_MONTHS[monthNumber - 1].toLowerCase();
       return {
@@ -150,7 +162,7 @@
         closed,
         name,
         short,
-        option: `${name} ${year}${closed ? '' : ` · 1–${to} (en curso)`}`,
+        option: `${name} ${year}${closed ? ' · mes completo' : ` · 1–${to} (avance al domingo)`}`,
         labels: {
           range: closed ? `${name} ${year}` : `1 – ${to} ${name} ${year}`,
           // Recuadro con las fechas, arriba a la derecha de las laminas (como en las plantillas del equipo).
@@ -166,7 +178,7 @@
           file: `${name}${year}${closed ? '' : `_1-${to}`}`,
         },
       };
-    });
+    }).filter(Boolean);
   }
 
   // Filas de una marca en un mes, del dia 1 al ultimo dia de la ventana (en un mes cerrado, el mes completo).
@@ -346,10 +358,11 @@
     const paid = hasColumn && item.has ? sumOf(item.rows, 'follows') : null;
     const trafficSpend = sumOf(item.rows.filter(row => row.group === 'trafico-perfil'), 'spend');
     const typed = field => {
-      const value = allNotes[item.key]?.[`seg:${brandKey}:${field}`];
+      const value = allNotes[item.noteKey || item.key]?.[`seg:${brandKey}:${field}`];
       return finite(value) ? Number(value) : null;
     };
-    const instagram = data?.instagram?.months?.get(item.key) || null;
+    const candidate = data?.instagram?.months?.get(item.key) || null;
+    const instagram = candidate && (item.closed ? candidate.complete : candidate.through === `${item.key}-${String(item.to).padStart(2, '0')}`) ? candidate : null;
     const nuevos = typed('nuevos') ?? instagram?.follows ?? null;
     const dejaron = typed('dejaron') ?? instagram?.unfollows ?? null;
     return {
@@ -374,7 +387,7 @@
     const data = brandData(brand.key);
     const months = keys.map(key => {
       const { month, rows } = windowRows(brand.key, key, period);
-      return { key, status: monthStatus(brand.key, key), rows, found: month?.found || [], source: month?.source || 'meta', has: rows.some(activity), lastDay: month?.lastDay || null, daysInMonth: month?.daysInMonth || null };
+      return { key, noteKey: noteKey(key, period), closed: period.closed, to: period.to, status: monthStatus(brand.key, key), rows, found: month?.found || [], source: month?.source || 'meta', has: rows.some(activity), lastDay: month?.lastDay || null, daysInMonth: month?.daysInMonth || null };
     });
     const current = months[months.length - 1];
     // "Nuevo" solo se sabe contra el mes inmediato anterior: si falta (sin descarga), un arte de ese mes pareceria nuevo.
@@ -436,7 +449,7 @@
       period,
       labels: period.labels,
       keys,
-      notes: allNotes[period.key] || {},
+      notes: allNotes[noteKey(period.key, period)] || {},
       brands,
       followers,
       spend,
@@ -813,9 +826,9 @@
       if (broken.length) items.push(`<b>${esc(brand.name)}</b>: la descarga de ${esc(monthNames(broken))} no se pudo leer (ver Archivo de Reportes).`);
       // Un mes cerrado cuya descarga no llega al ultimo dia se compara como si estuviera completo.
       brand.months.forEach((item, index) => {
-        const closed = index < brand.months.length - 1 || report.period.closed;
-        if (closed && item.status === 'ok' && item.has && item.lastDay && item.lastDay < item.daysInMonth) {
-          const missingDays = item.daysInMonth - item.lastDay === 1 ? `el ${item.daysInMonth}` : `del ${item.lastDay + 1} al ${item.daysInMonth}`;
+        const end = report.period.closed ? item.daysInMonth : Math.min(report.period.to, item.daysInMonth);
+        if (item.status === 'ok' && item.has && item.lastDay && item.lastDay < end) {
+          const missingDays = end - item.lastDay === 1 ? `el ${end}` : `del ${item.lastDay + 1} al ${end}`;
           items.push(item.source === 'nexus'
             ? `<b>${esc(brand.name)}</b>: los datos de Nexus de ${esc(monthNames([item.key]))} llegan hasta el día ${item.lastDay}; faltan ${missingDays}. Revisar la última lectura de la cuenta en Nexus (Monitoreo).`
             : `<b>${esc(brand.name)}</b>: la descarga de ${esc(monthNames([item.key]))} llega hasta el día ${item.lastDay}; faltan ${missingDays}. Volver a descargarla completa.`);
@@ -1208,7 +1221,7 @@
               <div class="rp-table-foot">Costo/seg. = inversión en Tráfico al perfil ÷ seguidores de pauta de todas las campañas.${missing.length ? ` La descarga de ${esc(list(missing))} no trae la columna de seguidores.` : ''}</div>
             </div>
           </div>
-          ${missingAny && api().teamMode() ? '<p class="rp-hint">Escribe en la tabla los nuevos y las bajas de cada marca (clic en la casilla). Salen de Meta Business Suite &gt; Estadísticas &gt; Público &gt; Tendencias, con la cuenta de Instagram y el mes completo: <b>Nuevos</b> = Seguimientos, <b>Bajas</b> = Personas que dejaron de seguirte. Netos y orgánico se calculan solos. Esta indicación no sale en el PDF.</p>' : ''}
+          ${missingAny && api().teamMode() ? '<p class="rp-hint">Escribe en la tabla los nuevos y las bajas de cada marca (clic en la casilla). Salen de Meta Business Suite &gt; Estadísticas &gt; Público &gt; Tendencias, con la cuenta de Instagram y el mismo período seleccionado en este reporte: <b>Nuevos</b> = Seguimientos, <b>Bajas</b> = Personas que dejaron de seguirte. Netos y orgánico se calculan solos. Esta indicación no sale en el PDF.</p>' : ''}
           ${insight('Clave', 'user', 'seg:clave3', noteOr(notes, 'seg:clave3', suggestFollowersKey(report)))}
         </div>
         ${footer(report.labels.followersSource, report, page, total)}
@@ -1452,7 +1465,8 @@
         node.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); node.blur(); } });
         node.addEventListener('blur', () => {
           const digits = node.innerText.replace(/[^\d]/g, '');
-          const month = /^\d{4}-\d{2}$/.test(node.dataset.month || '') ? node.dataset.month : monthKey;
+          const period = periods().find(item => item.key === selectedMonth);
+          const month = /^\d{4}-\d{2}$/.test(node.dataset.month || '') && period ? noteKey(node.dataset.month, period) : monthKey;
           saveNote(month, node.dataset.num, digits === '' ? null : Number(digits));
           render();
         });
@@ -1517,7 +1531,7 @@
         ${pages.map((paint, index) => paint(index + 1, pages.length)).join('')}
       </div>`;
     fitDeck();
-    wireEditables(host, period.key);
+    wireEditables(host, noteKey(period.key, period));
     wireThumbs(host);
   }
 
@@ -1538,6 +1552,11 @@
     render();
     if (wired) return;
     wired = true;
+    document.getElementById('week-type')?.addEventListener('change', event => {
+      reportMode = event.target.value === 'advance' ? 'advance' : 'monthly';
+      selectedMonth = '';
+      render();
+    });
     document.getElementById('week-select')?.addEventListener('change', event => {
       selectedMonth = event.target.value;
       render();
@@ -1546,7 +1565,8 @@
     // Sin dialogo de confirmacion: vuelve a los textos propuestos del mes (las cifras escritas se quedan).
     document.getElementById('week-reset')?.addEventListener('click', () => {
       if (!selectedMonth) return;
-      resetNotes(selectedMonth);
+      const period = periods().find(item => item.key === selectedMonth);
+      if (period) resetNotes(noteKey(selectedMonth, period));
       render();
     });
     const host = document.getElementById('week-report');

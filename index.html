@@ -14,7 +14,7 @@
 <body>
 <div class="shell">
   <aside class="sidebar" id="sidebar">
-    <div class="s-brand"><div class="s-title">Inversiones Excambiare</div><div class="s-sub">BI Agencia Lima Retail <span class="app-version">v2.11.1</span></div></div>
+    <div class="s-brand"><div class="s-title">Inversiones Excambiare</div><div class="s-sub">BI Agencia Lima Retail <span class="app-version">v2.11.2</span></div></div>
     <!-- Los modulos van en su propio bloque con scroll: el pie (cuenta, WhatsApp y web) queda siempre a la vista. -->
     <nav class="s-nav" aria-label="Módulos del tablero">
     <div class="s-group-lbl">Gasto publicitario por marca</div>
@@ -348,8 +348,12 @@
           <button type="button" class="month-tab" data-view-target="view-week">Generación de Reporte</button>
         </div>
         <h1 class="section-title">Generación de Reporte</h1>
-        <p class="section-desc">El Reporte de Publicidad de las tres marcas con el diseño del modelo de Excambiare: crecimiento de seguidores, una página por objetivo de cada marca con sus mejores anuncios de interacción y conclusiones. Elige el mes; los seguidores nuevos y las bajas (Meta Business Suite) se escriben en la tabla de seguidores, y los textos vienen propuestos y se editan con un clic sobre la página antes de descargar el PDF.</p>
+        <p class="section-desc">El Reporte de Publicidad de las tres marcas con el diseño del modelo de Excambiare: crecimiento de seguidores, una página por objetivo de cada marca con sus mejores anuncios de interacción y conclusiones. Elige Mensual para comparar meses completos, o Avance para comparar del día 1 al último domingo cerrado con los mismos días de los tres meses anteriores. Los seguidores nuevos y las bajas (Meta Business Suite) se escriben en la tabla de seguidores, y los textos vienen propuestos y se editan con un clic sobre la página antes de descargar el PDF.</p>
         <div class="panel week-toolbar">
+          <label class="reports-field" for="week-type">
+            <span class="sr-only">Tipo de reporte</span>
+            <select id="week-type"><option value="monthly">Mensual · mes completo</option><option value="advance">Avance · cierre del domingo</option></select>
+          </label>
           <label class="reports-field" for="week-select">
             <span class="sr-only">Mes del reporte</span>
             <select id="week-select"><option value="">Cargando meses...</option></select>
@@ -429,7 +433,7 @@
 <script src="js/objectives.js"></script>
 <script src="js/messages-calculator.js"></script>
 <script src="js/reports-archive.js"></script>
-<script src="js/report-week.js"></script>
+<script src="js/report-week.js?v=2.11.2"></script>
 <script src="js/draft-store.js"></script>
 <script src="js/bitacora.js"></script>
 <script src="js/projections.js"></script>

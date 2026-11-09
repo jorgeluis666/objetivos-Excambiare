@@ -41,6 +41,9 @@ jobs:
           if [ -z "$DASHBOARD_PASSWORD" ]; then echo "::error::Falta el secret DASHBOARD_PASSWORD"; exit 1; fi
           node scripts/build.js
 
+      - name: Verificar periodos del reporte
+        run: node tests/report-periods.cjs
+
       - name: Comprobar que no sale nada en claro
         run: |
           grep -q 'id="gate"' dist/index.html || { echo "::error::dist/index.html no salio cifrado"; exit 1; }
