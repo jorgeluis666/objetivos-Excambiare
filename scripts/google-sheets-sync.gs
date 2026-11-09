@@ -44,7 +44,7 @@ const SNAPSHOT_PROPERTY = 'SNAPSHOT_FILE_ID';
 const SNAPSHOT_NAME = 'Excambiare - barrido del tablero.json';
 // Subirla al cambiar aggregateRaw_, monthRows_, nexusValues_, toDay_, toNumber_, RAW_COLUMNS, NEXUS_COLUMNS,
 // OUTPUT_COLUMNS o TIMEZONE: los meses guardados con otra version se vuelven a leer aunque su archivo no haya cambiado.
-const SWEEP_VERSION = 4;
+const SWEEP_VERSION = 5;
 const MANUAL_THROTTLE_MS = 60 * 1000;
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MONTH_PATTERNS = [
@@ -271,7 +271,7 @@ function sweep_(origin) {
 // Un archivo por mes: si hay varios del mismo mes se usa el editado mas recientemente y se avisa.
 // Un mes ya cerrado cuyo archivo no cambio desde el barrido anterior reutiliza sus filas sin abrir la hoja.
 function readMonths_(brand, beforeBrand, sameVersion, deadline) {
-  const files = DriveApp.getFolderById(folderId_(brand.data)).getFiles();
+  const files = dataFiles_(brand.data);
   const byMonth = {};
   const ignored = [];
   while (files.hasNext()) {
@@ -288,7 +288,7 @@ function readMonths_(brand, beforeBrand, sameVersion, deadline) {
     }
     const current = byMonth[period.key];
     if (!current) byMonth[period.key] = { period, file, duplicates: [] };
-    else if (file.getLastUpdated() > current.file.getLastUpdated()) {
+    else if (preferDataFile_(files, file, current.file)) {
       current.duplicates.push(current.file.getName());
       current.file = file;
     } else current.duplicates.push(file.getName());
@@ -897,4 +897,32 @@ function normalize_(value) {
 
 function json_(payload) {
   return ContentService.createTextOutput(JSON.stringify(payload)).setMimeType(ContentService.MimeType.JSON);
+}
+
+// Conserva el archivo historico y prioriza los meses publicados por Nexus.
+// NEXUS_<propiedad de carpeta> es opcional; sin ella se mantiene el origen anterior.
+function dataFiles_(property) {
+  const legacy = DriveApp.getFolderById(folderId_(property)).getFiles();
+  const nexusId = String(PropertiesService.getScriptProperties().getProperty('NEXUS_' + property) || '').trim();
+  const preferred = new Set();
+  const pending = [];
+  if (nexusId && nexusId !== folderId_(property)) {
+    const current = DriveApp.getFolderById(nexusId).getFiles();
+    while (current.hasNext()) {
+      const file = current.next();
+      preferred.add(file.getId());
+      pending.push(file);
+    }
+  }
+  let index = 0;
+  return {
+    preferred,
+    hasNext: () => legacy.hasNext() || index < pending.length,
+    next: () => legacy.hasNext() ? legacy.next() : pending[index++],
+  };
+}
+function preferDataFile_(files, file, current) {
+  const incoming = files.preferred.has(file.getId());
+  const existing = files.preferred.has(current.getId());
+  return incoming !== existing ? incoming : file.getLastUpdated() > current.getLastUpdated();
 }
