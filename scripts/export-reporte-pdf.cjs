@@ -82,7 +82,10 @@ async function main() {
       document.body.replaceChildren(host.cloneNode(true));
       return { laminas: laminas.length, marcas: ['Sol y Tierra', 'Mex Cream', 'Gold Fusion'].filter(m => texto.includes(m)) };
     });
-    if (prueba.marcas.length !== 3) throw new Error('El PDF no trae las tres marcas, solo: ' + prueba.marcas.join(', '));
+    // El mazo lleva solo las marcas con entregas ese mes, que no siempre son las tres: no es un fallo,
+    // pero quien manda el PDF tiene que saberlo, asi que se avisa y se anota en el manifiesto.
+    if (!prueba.marcas.length) throw new Error('El PDF no nombra ninguna de las tres marcas.');
+    if (prueba.marcas.length < 3) console.warn('AVISO: este mes el reporte solo trae ' + prueba.marcas.join(' y ') + '.');
     await page.addStyleTag({ content: '@media print { body { margin:0!important;padding:0!important } .rp-deck {display:block!important} .rp-page {zoom:1!important} }' });
     // Clonar crea imagenes nuevas: hay que decodificarlas antes de imprimir o salen en blanco.
     await page.evaluate(async () => {
@@ -96,7 +99,7 @@ async function main() {
     await page.pdf({ path: pdfPath, printBackground: true, preferCSSPageSize: true, displayHeaderFooter: false });
     const pdf = fs.readFileSync(pdfPath);
 
-    const manifiesto = { generador: 'excambiare-reporte-v1', mes: elegido.value, titulo: elegido.text, laminas: prueba.laminas,
+    const manifiesto = { generador: 'excambiare-reporte-v1', mes: elegido.value, titulo: elegido.text, laminas: prueba.laminas, marcas: prueba.marcas,
       sha256: crypto.createHash('sha256').update(pdf).digest('hex'), bytes: pdf.length, barrido: sweptAt, generado: new Date().toISOString() };
 
     // Cifrado antes de salir del runner. El .pdf en claro no se sube: se borra aqui mismo.
