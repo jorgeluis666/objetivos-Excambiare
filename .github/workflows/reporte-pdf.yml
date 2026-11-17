@@ -1,0 +1,51 @@
+name: PDF del reporte mensual
+
+# Imprime el reporte mensual de las tres marcas con el generador del propio tablero. Se lanza a mano:
+# aqui no hay envio automatico todavia, esto es lo que hace falta para poder armar el PDF fuera del
+# navegador, porque el barrido del cliente solo existe detras del secret DATA_ENDPOINT.
+#
+# El PDF sale cifrado como artefacto (AES-256-GCM + RSA-OAEP contra scripts/reporte-publica.pem):
+# este repositorio es publico y sus artefactos los descarga cualquiera.
+on:
+  workflow_dispatch:
+    inputs:
+      mes:
+        description: 'Mes del reporte, AAAA-MM (vacio: el mas reciente con datos)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reporte-pdf
+  cancel-in-progress: false
+
+jobs:
+  pdf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Instalar el exportador
+        run: npm install --no-save --no-package-lock --no-audit --no-fund puppeteer-core@25.16.0
+
+      - name: Imprimir el reporte
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+          DATA_ENDPOINT: ${{ secrets.DATA_ENDPOINT }}
+          MES: ${{ inputs.mes }}
+        run: node scripts/export-reporte-pdf.cjs
+
+      - name: Guardar el PDF cifrado
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-excambiare
+          path: reporte-output/*.encrypted.json
+          retention-days: 3
+          if-no-files-found: error

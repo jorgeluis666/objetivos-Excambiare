@@ -9,3 +9,6 @@ credentials/
 
 # Copia local del barrido de Meta (datos del cliente): la genera npm run build, nunca va al repo.
 data/excambiare-meta*.json
+
+# Salida del exportador del reporte (PDF del cliente): nunca va al repo.
+reporte-output/
