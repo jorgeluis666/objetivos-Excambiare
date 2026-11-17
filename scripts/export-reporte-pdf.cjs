@@ -102,7 +102,10 @@ async function main() {
       const texto = host.innerText;
       if (texto.length < 1000) throw Error('El reporte salio vacio');
       document.body.replaceChildren(host.cloneNode(true));
-      return { laminas: laminas.length, marcas: ['Sol y Tierra', 'Mex Cream', 'Gold Fusion'].filter(m => texto.includes(m)) };
+      // En minusculas: innerText aplica el text-transform del CSS, asi que un titulo en mayusculas
+      // no se encuentra comparando tal cual y la marca parecia ausente del mazo sin estarlo.
+      const plano = texto.toLowerCase();
+      return { laminas: laminas.length, marcas: ['Sol y Tierra', 'Mex Cream', 'Gold Fusion'].filter(m => plano.includes(m.toLowerCase())) };
     });
     // El mazo lleva solo las marcas con entregas ese mes, que no siempre son las tres: no es un fallo,
     // pero quien manda el PDF tiene que saberlo, asi que se avisa y se anota en el manifiesto.
