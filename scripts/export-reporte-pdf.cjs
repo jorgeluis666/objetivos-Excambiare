@@ -47,6 +47,15 @@ async function main() {
   const endpoint = (process.env.DATA_ENDPOINT || '').trim();
   if (!ENDPOINT_RE.test(endpoint)) throw new Error('Falta DATA_ENDPOINT o no es una URL /exec de script.google.com');
   const sweptAt = await bajarBarrido(endpoint);
+  // Que trajo el barrido, por marca y mes. Un mes con error no entra en el reporte y hasta ahora no
+  // se veia en ningun sitio: asi se sabe si falta un mes porque no hay datos o porque fallo su lectura.
+  const barrido = JSON.parse(fs.readFileSync(SNAPSHOT, 'utf8'));
+  for (const marca of barrido.brands || []) {
+    const meses = (marca.months || []).map(m => `${m.year}-${String(m.month).padStart(2, '0')}${m.error ? '!' : ''}`).join(' ');
+    console.log(`BARRIDO ${marca.label}: ${meses || 'sin meses'}${marca.error ? ' | marca con error: ' + marca.error : ''}`);
+    for (const m of marca.months || []) if (m.error) console.log(`  ERROR ${m.year}-${m.month} «${m.fileName}»: ${String(m.error).slice(0, 200)}`);
+    for (const x of marca.ignored || []) console.log(`  IGNORADO «${x.fileName}»: ${x.reason}`);
+  }
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
   await new Promise(r => servidor.listen(0, '127.0.0.1', r));
