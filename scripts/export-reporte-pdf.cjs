@@ -16,6 +16,9 @@ const SNAPSHOT = path.join(ROOT, 'data', 'excambiare-meta.json');
 const OUT_DIR = path.join(ROOT, 'reporte-output');
 const ENDPOINT_RE = /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]{20,}\/exec$/;
 const MES = (process.env.MES || '').trim();   // '2026-11'; vacio: el mes mas reciente con datos
+// El generador tiene dos modos y no ofrecen los mismos meses: "monthly" solo da meses cerrados, asi que
+// el mes en curso solo existe en "advance", que cierra en el ultimo domingo (el acumulado 1-N del mes).
+const MODO = (process.env.MODO || '').trim() === 'advance' ? 'advance' : 'monthly';
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml', '.webp': 'image/webp', '.ico': 'image/x-icon' };
 
 // El barrido, igual que en build.js: si Google contesta mal se dice que contesto, sin datos del cliente.
@@ -76,6 +79,10 @@ async function main() {
     await page.evaluate(() => { document.getElementById('view-reports')?.classList.add('visible'); });
     await page.evaluate(() => window.ReporteSemanal.init());
     await page.waitForFunction(() => document.querySelectorAll('#week-select option').length > 0, { timeout: 90000 });
+    if (MODO === 'advance') {
+      await page.select('#week-type', 'advance');
+      await page.waitForFunction(() => [...document.querySelectorAll('#week-select option')].some(o => /avance/i.test(o.textContent)), { timeout: 60000 });
+    }
 
     const opciones = await page.evaluate(() => [...document.querySelectorAll('#week-select option')].map(o => ({ value: o.value, text: o.textContent.trim() })));
     const conDatos = opciones.filter(o => o.value);
@@ -109,12 +116,12 @@ async function main() {
       if (rotas) throw Error(rotas + ' imagen(es) no cargaron');
     });
 
-    const nombre = `excambiare-${elegido.value}`;
+    const nombre = `excambiare-${elegido.value}${MODO === 'advance' ? '-avance' : ''}`;
     const pdfPath = path.join(OUT_DIR, nombre + '.pdf');
     await page.pdf({ path: pdfPath, printBackground: true, preferCSSPageSize: true, displayHeaderFooter: false });
     const pdf = fs.readFileSync(pdfPath);
 
-    const manifiesto = { generador: 'excambiare-reporte-v1', mes: elegido.value, titulo: elegido.text, laminas: prueba.laminas, marcas: prueba.marcas,
+    const manifiesto = { generador: 'excambiare-reporte-v1', mes: elegido.value, modo: MODO, titulo: elegido.text, laminas: prueba.laminas, marcas: prueba.marcas,
       sha256: crypto.createHash('sha256').update(pdf).digest('hex'), bytes: pdf.length, barrido: sweptAt, generado: new Date().toISOString() };
 
     // Cifrado antes de salir del runner. El .pdf en claro no se sube: se borra aqui mismo.

@@ -13,6 +13,12 @@ on:
         description: 'Mes del reporte, AAAA-MM (vacio: el mas reciente con datos)'
         required: false
         default: ''
+      modo:
+        description: 'monthly = mes cerrado; advance = acumulado del mes en curso al ultimo domingo'
+        required: false
+        type: choice
+        options: [monthly, advance]
+        default: monthly
 
 permissions:
   contents: read
@@ -40,6 +46,7 @@ jobs:
           CHROME_PATH: /usr/bin/google-chrome
           DATA_ENDPOINT: ${{ secrets.DATA_ENDPOINT }}
           MES: ${{ inputs.mes }}
+          MODO: ${{ inputs.modo }}
         run: node scripts/export-reporte-pdf.cjs
 
       - name: Guardar el PDF cifrado
