@@ -54,6 +54,12 @@ async function main() {
     const meses = (marca.months || []).map(m => `${m.year}-${String(m.month).padStart(2, '0')}${m.error ? '!' : ''}`).join(' ');
     console.log(`BARRIDO ${marca.label}: ${meses || 'sin meses'}${marca.error ? ' | marca con error: ' + marca.error : ''}`);
     for (const m of marca.months || []) if (m.error) console.log(`  ERROR ${m.year}-${m.month} «${m.fileName}»: ${String(m.error).slice(0, 200)}`);
+    // De los dos ultimos meses, lo justo para saber por que un mes no llega al reporte: cuantas filas
+    // trajo, con que columnas y que aspecto tiene su dia (si no es AAAA-MM-DD, el tablero las descarta).
+    for (const m of (marca.months || []).slice(-2)) {
+      const dia = (m.columns || []).indexOf('day');
+      console.log(`  ${m.year}-${String(m.month).padStart(2, '0')} filas=${(m.rows || []).length} dia=${dia < 0 ? '(sin columna)' : JSON.stringify((m.rows || [])[0]?.[dia])} columnas=${(m.columns || []).join(',')}`);
+    }
     for (const x of marca.ignored || []) console.log(`  IGNORADO «${x.fileName}»: ${x.reason}`);
   }
   fs.mkdirSync(OUT_DIR, { recursive: true });
